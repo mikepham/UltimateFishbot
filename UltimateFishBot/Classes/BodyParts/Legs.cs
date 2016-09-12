@@ -1,43 +1,48 @@
-﻿using System.Threading;
-using System.Windows.Forms;
-using UltimateFishBot.Classes.Helpers;
-
-namespace UltimateFishBot.Classes.BodyParts
+﻿namespace UltimateFishBot.Classes.BodyParts
 {
-    class Legs
+    using System.Threading;
+    using System.Windows.Forms;
+
+    using UltimateFishBot.Classes.Helpers;
+    using UltimateFishBot.Properties;
+
+    internal class Legs
     {
         public enum Path
         {
-            FRONT_BACK  = 0,
-            LEFT_RIGHT  = 1,
-            JUMP        = 2
+            FRONT_BACK = 0, 
+
+            LEFT_RIGHT = 1, 
+
+            JUMP = 2
         }
 
         public void DoMovement(T2S t2s)
         {
-            switch ((Path)Properties.Settings.Default.AntiAfkMoves)
+            switch ((Path)Settings.Default.AntiAfkMoves)
             {
                 case Path.FRONT_BACK:
-                    MovePath(new Keys[] { Keys.Up, Keys.Down });
+                    this.MovePath(new[] { Keys.Up, Keys.Down });
                     break;
                 case Path.LEFT_RIGHT:
-                    MovePath(new Keys[] { Keys.Left, Keys.Right });
+                    this.MovePath(new[] { Keys.Left, Keys.Right });
                     break;
                 case Path.JUMP:
-                    MovePath(new Keys[] { Keys.Space });
+                    this.MovePath(new[] { Keys.Space });
                     break;
                 default:
-                    MovePath(new Keys[] { Keys.Left, Keys.Right });
+                    this.MovePath(new[] { Keys.Left, Keys.Right });
                     break;
             }
-            t2s.Say("Anti A F K");
+
+            t2s?.Say("Anti A F K");
         }
 
         private void MovePath(Keys[] moves)
         {
-            foreach (Keys move in moves)
+            foreach (var move in moves)
             {
-                SingleMove(move);
+                this.SingleMove(move);
                 Thread.Sleep(250);
             }
         }

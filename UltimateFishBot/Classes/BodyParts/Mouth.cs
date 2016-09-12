@@ -1,60 +1,64 @@
-﻿using System.Speech.Synthesis;
-using UltimateFishBot.Properties;
-
-namespace UltimateFishBot.Classes.BodyParts
+﻿namespace UltimateFishBot.Classes.BodyParts
 {
-    class Mouth
+    using System.Speech.Synthesis;
+
+    using UltimateFishBot.Properties;
+
+    internal class Mouth
     {
-        private frmMain m_mainForm;
-        T2S t2s = new T2S();
+        private readonly frmMain m_mainForm;
+
+        private readonly T2S t2s = new T2S();
 
         public Mouth(frmMain mainForm)
         {
-            m_mainForm = mainForm;
+            this.m_mainForm = mainForm;
         }
 
         public void Say(string text)
         {
-            m_mainForm.lblStatus.Text = text;
+            this.m_mainForm.lblStatus.Text = text;
             if (text == Translate.GetTranslate("manager", "LABEL_PAUSED") || (text == Translate.GetTranslate("manager", "LABEL_STOPPED")))
             {
-                m_mainForm.lblStatus.Image = Resources.offline;
+                this.m_mainForm.lblStatus.Image = Resources.offline;
             }
             else
             {
-                m_mainForm.lblStatus.Image = Resources.online;
+                this.m_mainForm.lblStatus.Image = Resources.online;
             }
-            t2s.Say(text);
 
+            this.t2s.Say(text);
         }
-
     }
-    class T2S
+
+    internal class T2S
     {
-        SpeechSynthesizer synthesizer = new SpeechSynthesizer();
-        bool uset2s;
-        string lastMessage;
-        
+        private string lastMessage;
+
+        private readonly SpeechSynthesizer synthesizer = new SpeechSynthesizer();
+
+        private readonly bool uset2s;
+
         public T2S()
         {
-            uset2s = Properties.Settings.Default.Txt2speech;
-            synthesizer.Volume = 60;  // 0...100
-            synthesizer.Rate = 1;     // -10...10
+            this.uset2s = Settings.Default.Txt2speech;
+            this.synthesizer.Volume = 60; // 0...100
+            this.synthesizer.Rate = 1; // -10...10
         }
 
         public void Say(string text)
         {
-            //Debug code
-            //System.Console.WriteLine("Use T2S: " + uset2s);
-            //System.Console.WriteLine("Previous message: " + lastMessage);
-            //System.Console.WriteLine("Current message: " + text);
-            //System.Console.WriteLine("Synthesizer ready: " + (synthesizer.State == SynthesizerState.Ready));
+            // Debug code
+            // System.Console.WriteLine("Use T2S: " + uset2s);
+            // System.Console.WriteLine("Previous message: " + lastMessage);
+            // System.Console.WriteLine("Current message: " + text);
+            // System.Console.WriteLine("Synthesizer ready: " + (synthesizer.State == SynthesizerState.Ready));
 
             // Say asynchronous text through Text 2 Speech synthesizer
-            if (uset2s && (lastMessage != text) && (synthesizer.State == SynthesizerState.Ready))
+            if (this.uset2s && (this.lastMessage != text) && (this.synthesizer.State == SynthesizerState.Ready))
             {
-                synthesizer.SpeakAsync(text);
-                lastMessage = text;
+                this.synthesizer.SpeakAsync(text);
+                this.lastMessage = text;
             }
         }
     }

@@ -35,6 +35,7 @@
             this.LabelScanningStepsDesc = new System.Windows.Forms.Label();
             this.LabelScanningSteps = new System.Windows.Forms.Label();
             this.TabPage3 = new System.Windows.Forms.TabPage();
+            this.cbSoundAvg = new System.Windows.Forms.CheckBox();
             this.lblAudioLevel = new System.Windows.Forms.Label();
             this.pgbSoundLevel = new System.Windows.Forms.ProgressBar();
             this.LabelAudioDeviceDesc = new System.Windows.Forms.Label();
@@ -129,7 +130,6 @@
             this.btnReset = new System.Windows.Forms.Button();
             this.chkTxt2speech = new System.Windows.Forms.CheckBox();
             this.buttonCancel = new System.Windows.Forms.Button();
-            this.cbSoundAvg = new System.Windows.Forms.CheckBox();
             this.TabPage3.SuspendLayout();
             this.TabPage4.SuspendLayout();
             this.tabSettings.SuspendLayout();
@@ -196,6 +196,16 @@
             this.TabPage3.Text = "Hearing The Fish";
             this.TabPage3.UseVisualStyleBackColor = true;
             // 
+            // cbSoundAvg
+            // 
+            this.cbSoundAvg.AutoSize = true;
+            this.cbSoundAvg.Location = new System.Drawing.Point(14, 178);
+            this.cbSoundAvg.Name = "cbSoundAvg";
+            this.cbSoundAvg.Size = new System.Drawing.Size(404, 17);
+            this.cbSoundAvg.TabIndex = 20;
+            this.cbSoundAvg.Text = "Use averaging method (better in crowded areas, but less chance to catch a fish)";
+            this.cbSoundAvg.UseVisualStyleBackColor = true;
+            // 
             // lblAudioLevel
             // 
             this.lblAudioLevel.AutoSize = true;
@@ -207,9 +217,9 @@
             // 
             // pgbSoundLevel
             // 
-            this.pgbSoundLevel.Location = new System.Drawing.Point(278, 99);
+            this.pgbSoundLevel.Location = new System.Drawing.Point(348, 99);
             this.pgbSoundLevel.Name = "pgbSoundLevel";
-            this.pgbSoundLevel.Size = new System.Drawing.Size(182, 21);
+            this.pgbSoundLevel.Size = new System.Drawing.Size(112, 21);
             this.pgbSoundLevel.TabIndex = 18;
             // 
             // LabelAudioDeviceDesc
@@ -231,7 +241,7 @@
             "Default"});
             this.cmbAudio.Location = new System.Drawing.Point(173, 99);
             this.cmbAudio.Name = "cmbAudio";
-            this.cmbAudio.Size = new System.Drawing.Size(99, 21);
+            this.cmbAudio.Size = new System.Drawing.Size(169, 21);
             this.cmbAudio.TabIndex = 3;
             this.cmbAudio.SelectedIndexChanged += new System.EventHandler(this.cmbAudio_SelectedIndexChanged);
             // 
@@ -1182,16 +1192,6 @@
             this.buttonCancel.Text = "Cancel";
             this.buttonCancel.UseVisualStyleBackColor = true;
             this.buttonCancel.Click += new System.EventHandler(this.buttonCancel_Click);
-            // 
-            // cbSoundAvg
-            // 
-            this.cbSoundAvg.AutoSize = true;
-            this.cbSoundAvg.Location = new System.Drawing.Point(14, 178);
-            this.cbSoundAvg.Name = "cbSoundAvg";
-            this.cbSoundAvg.Size = new System.Drawing.Size(404, 17);
-            this.cbSoundAvg.TabIndex = 20;
-            this.cbSoundAvg.Text = "Use averaging method (better in crowded areas, but less chance to catch a fish)";
-            this.cbSoundAvg.UseVisualStyleBackColor = true;
             // 
             // frmSettings
             // 
