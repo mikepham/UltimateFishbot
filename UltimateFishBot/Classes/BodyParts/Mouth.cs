@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace UltimateFishBot.BodyParts
 {
@@ -17,7 +17,6 @@ namespace UltimateFishBot.BodyParts
             _progressHandle.Report(text);
             _t2S.Say(text);
 
-            this.t2s.Say(text);
         }
     }
 }

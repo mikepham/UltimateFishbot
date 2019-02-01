@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Xml;
@@ -81,7 +81,10 @@ namespace UltimateFishBot
                 XmlNodeList formList = _mElements.GetElementsByTagName(formName);
 
                 // Try to find the correct translation for formName and nodeName
-                foreach (XmlNode mainNode in formList) foreach (XmlNode node in mainNode.ChildNodes) if (node.Name == nodeName) returnList.Add(node.InnerText);
+                foreach (XmlNode mainNode in formList)
+                    foreach (XmlNode node in mainNode.ChildNodes)
+                        if (node.Name == nodeName)
+                            returnList.Add(node.InnerText);
 
                 // Remove the extras spaces from each lines
                 var enumerable = returnList.Select(text => string.Join("\n", text.Split('\n').Select(s => s.Trim())));
@@ -95,25 +98,6 @@ namespace UltimateFishBot
             }
 
             return returnList;
-        }
-
-        private static void ExtractElements()
-        {
-            if (m_elements == null)
-            {
-                var doc = new XmlDocument();
-
-                try
-                {
-                    // Example : ./Resources/English.xml
-                    doc.Load("./Resources/" + Settings.Default.Language + ".xml");
-                    m_elements = doc.DocumentElement;
-                }
-                catch (Exception ex)
-                {
-                    Console.Out.WriteLine(ex.Message);
-                }
-            }
         }
     }
 }

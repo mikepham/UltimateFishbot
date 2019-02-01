@@ -19,11 +19,21 @@ namespace UltimateFishBot.Helpers
             public int Bottom;
         }
 
-    using UltimateFishBot.Properties;
+        [StructLayout(LayoutKind.Sequential)]
+        public struct Point
+        {
+            public Int32 x;
+            public Int32 y;
+        }
 
-    internal class Win32
-    {
-        private const uint WM_LBUTTONDOWN = 513;
+        [StructLayout(LayoutKind.Sequential)]
+        public struct CursorInfo
+        {
+            public Int32 cbSize;
+            public Int32 flags;
+            public IntPtr hCursor;
+            public Point ptScreenPos;
+        }
 
         public enum KeyState
         {
@@ -40,11 +50,14 @@ namespace UltimateFishBot.Helpers
             Restore = 9, ShowDefault = 10, ForceMinimized = 11
         };
 
-        private const uint WM_RBUTTONDOWN = 516;
+        [DllImport("user32.dll", EntryPoint = "FindWindow")]
+        private static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
 
-        private const uint WM_RBUTTONUP = 517;
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
 
-        private static int LastRectX;
+        [DllImport("user32.dll")]
+        private static extern bool GetWindowRect(IntPtr hwnd, ref Rect rectangle);
 
         [DllImport("user32.dll")]
         public static extern bool GetClientRect(IntPtr hWnd, out Rect lpRect);
@@ -52,24 +65,23 @@ namespace UltimateFishBot.Helpers
         [DllImport("user32.dll")]
         private static extern bool SetCursorPos(int x, int y);
 
-        private static int LastX;
+        [DllImport("user32.dll")]
+        private static extern bool GetCursorInfo(out CursorInfo pci);
 
         [DllImport("user32.dll")]
         private static extern bool DrawIcon(IntPtr hDc, int x, int y, IntPtr hIcon);
 
-        public enum keyState
-        {
-            KEYDOWN = 0, 
+        [DllImport("user32.dll")]
+        private static extern bool keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
 
         [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
         private static extern bool SendNotifyMessage(IntPtr hWnd, uint msg, UIntPtr wParam, IntPtr lParam);
 
-            KEYUP = 2
-        }
+        [DllImport("user32.dll")]
+        public static extern bool RegisterHotKey(IntPtr hWnd, int id, int fsModifiers, int vk);
 
-        public static void ActivateApp(string processName)
-        {
-            var p = Process.GetProcessesByName(processName);
+        [DllImport("user32.dll")]
+        public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
         [DllImport("user32.dll")]
         private static extern bool IsIconic(IntPtr hWnd);
@@ -177,9 +189,9 @@ namespace UltimateFishBot.Helpers
         public static IntPtr FindWowWindow()
         {
             Process[] processlist = Process.GetProcesses();
-            foreach(Process process in processlist)
+            foreach (Process process in processlist)
             {
-                if(process.MainWindowTitle.ToUpper().Equals("WORLD OF WARCRAFT".ToUpper()) || process.MainWindowTitle.ToUpper().Equals(@"魔兽世界".ToUpper()))
+                if (process.MainWindowTitle.ToUpper().Equals("WORLD OF WARCRAFT".ToUpper()) || process.MainWindowTitle.ToUpper().Equals(@"魔兽世界".ToUpper()))
                 {
                     return process.MainWindowHandle;
                 }
@@ -194,13 +206,11 @@ namespace UltimateFishBot.Helpers
             try
             {
                 actualCursorIcon = new Bitmap(width, height);
-                var g = Graphics.FromImage(actualCursorIcon);
-                DrawIcon(g.GetHdc(), 0, 0, actualCursor.hCursor);
+                Graphics g = Graphics.FromImage(actualCursorIcon);
+                Win32.DrawIcon(g.GetHdc(), 0, 0, actualCursor.hCursor);
                 g.ReleaseHdc();
             }
-            catch (Exception)
-            {
-            }
+            catch (Exception) { }
 
             return actualCursorIcon;
         }
@@ -254,8 +264,10 @@ namespace UltimateFishBot.Helpers
         {
             if (sKeys != " ")
             {
-                if (Settings.Default.UseAltKey) sKeys = "%(" + sKeys + ")"; // %(X) : Use the alt key
-                else sKeys = "{" + sKeys + "}"; // {X} : Avoid UTF-8 errors (é, è, ...)
+                if (Properties.Settings.Default.UseAltKey)
+                    sKeys = "%(" + sKeys + ")"; // %(X) : Use the alt key
+                else
+                    sKeys = "{" + sKeys + "}";  // {X} : Avoid UTF-8 errors (é, è, ...)
             }
 
             SendKeys.Send(sKeys);
@@ -279,7 +291,7 @@ namespace UltimateFishBot.Helpers
         {
             //long dWord = MakeDWord((LastX - LastRectX), (LastY - LastRectY));
             Rectangle wowRect = Win32.GetWowRectangle(wow);
-            long dWord = MakeDWord( (wowRect.Width/2), (wowRect.Height/2) );
+            long dWord = MakeDWord((wowRect.Width / 2), (wowRect.Height / 2));
             SendNotifyMessage(wow, WmRbuttondown, (UIntPtr)1, (IntPtr)dWord);
             Thread.Sleep(GetRandomDelay());
             SendNotifyMessage(wow, WmRbuttonup, (UIntPtr)1, (IntPtr)dWord);
@@ -291,18 +303,12 @@ namespace UltimateFishBot.Helpers
 
         public static bool SendKeyboardAction(Keys key, KeyState state)
         {
-            return (HiWord << 16) | (LoWord & 0xFFFF);
+            return SendKeyboardAction((byte)key.GetHashCode(), state);
         }
 
         public static bool SendKeyboardAction(byte key, KeyState state)
         {
-            public int cbSize;
-
-            public int flags;
-
-            public IntPtr hCursor;
-
-            public Point ptScreenPos;
+            return keybd_event(key, 0, (uint)state, (UIntPtr)0);
         }
 
         private static long MakeDWord(int loWord, int hiWord)

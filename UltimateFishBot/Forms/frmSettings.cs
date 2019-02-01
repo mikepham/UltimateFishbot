@@ -7,17 +7,6 @@ using System.Windows.Forms;
 
 namespace UltimateFishBot.Forms
 {
-    using System;
-    using System.Collections.Generic;
-    using System.IO;
-    using System.Threading;
-    using System.Windows.Forms;
-
-    using CoreAudioApi;
-
-    using UltimateFishBot.Classes;
-    using UltimateFishBot.Properties;
-
     public partial class frmSettings : Form
     {
         private static frmSettings inst;
@@ -28,9 +17,6 @@ namespace UltimateFishBot.Forms
             return inst;
         }
 
-        private Keys m_hotkey;
-
-        private readonly frmMain m_mainForm;
 
         private enum TabulationIndex
         {
@@ -44,17 +30,18 @@ namespace UltimateFishBot.Forms
 
         private frmMain m_mainForm;
         private MMDevice m_SndDevice;
+        private Keys m_hotkey;
 
         public frmSettings(frmMain mainForm)
         {
-            this.InitializeComponent();
-            this.m_mainForm = mainForm;
-            this.m_SndDevice = null;
+            InitializeComponent();
+            m_mainForm = mainForm;
+            m_SndDevice = null;
 
-            this.tmeAudio.Tick += this.tmeAudio_Tick;
+            tmeAudio.Tick += new EventHandler(tmeAudio_Tick);
         }
 
-        private enum TabulationIndex
+        private void frmSettings_Load(object sender, EventArgs e)
         {
             /*
              * Set Text from translate file
@@ -69,7 +56,7 @@ namespace UltimateFishBot.Forms
             tabSettings.TabPages[(int)TabulationIndex.AntiAfk].Text = Translate.GetTranslate("frmSettings", "TAB_TITLE_ANTI_AFK");
             tabSettings.TabPages[(int)TabulationIndex.Language].Text = Translate.GetTranslate("frmSettings", "TAB_TITLE_LANGUAGE");
 
-            HearingFishing = 2, 
+            /// General
 
             LabelDelayCast.Text = Translate.GetTranslate("frmSettings", "LABEL_DELAY_AFTER_CAST");
             LabelDelayCastDesc.Text = Translate.GetTranslate("frmSettings", "LABEL_DELAY_AFTER_CAST_DESC");
@@ -80,11 +67,7 @@ namespace UltimateFishBot.Forms
             LabelDelayLooting.Text = Translate.GetTranslate("frmSettings", "LABEL_DELAY_AFTER_LOOTING");
             LabelDelayLootingDesc.Text = Translate.GetTranslate("frmSettings", "LABEL_DELAY_AFTER_LOOTING_DESC");
 
-        public static frmSettings GetForm(frmMain main)
-        {
-            if (inst == null || inst.IsDisposed) inst = new frmSettings(main);
-            return inst;
-        }
+            /// Finding the Cursor
 
             LabelScanningSteps.Text = Translate.GetTranslate("frmSettings", "LABEL_SCANNING_STEPS");
             LabelScanningStepsDesc.Text = Translate.GetTranslate("frmSettings", "LABEL_SCANNING_STEPS_DESC");
@@ -109,9 +92,6 @@ namespace UltimateFishBot.Forms
             LabelMaxXY.Text = Translate.GetTranslate("frmSettings", "END_XY");
 
             /// Hearing the Fish
-            Settings.Default.SplashLimit = int.Parse(this.txtSplash.Text);
-            Settings.Default.AudioDevice = (string)this.cmbAudio.SelectedValue;
-            Settings.Default.AverageSound = this.cbSoundAvg.Checked;
 
             LabelSplashThreshold.Text = Translate.GetTranslate("frmSettings", "LABEL_SPLASH_THRESHOLD");
             LabelSplashThresholdDesc.Text = Translate.GetTranslate("frmSettings", "LABEL_SPLASH_THRESHOLD_DESC");
@@ -154,54 +134,23 @@ namespace UltimateFishBot.Forms
             LabelProcessNameDesc.Text = Translate.GetTranslate("frmSettings", "LABEL_PROCESS_NAME_DESC");
 
             /// Anti Afk
-            Settings.Default.AntiAfk = this.cbAntiAfk.Checked;
-            Settings.Default.AntiAfkTime = int.Parse(this.txtAntiAfkTimer.Text);
-            Settings.Default.AntiAfkMoves = this.cmbMovements.SelectedIndex;
 
             LoadAntiAfkMovements();
             cbAntiAfk.Text = Translate.GetTranslate("frmSettings", "CB_ANTI_AFK");
 
-                MessageBox.Show(Translate.GetTranslate("frmSettings", "LABEL_LANGUAGE_CHANGE"), Translate.GetTranslate("frmSettings", "TITLE_LANGUAGE_CHANGE"));
+            /// Language Settings
 
             labelLanguage.Text = Translate.GetTranslate("frmSettings", "LABEL_LANGUAGE");
             labelLanguageDesc.Text = Translate.GetTranslate("frmSettings", "LABEL_LANGUAGE_DESC");
 
-        private void cmbAudio_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            var sndDevEnum = new MMDeviceEnumerator();
+            /// Buttons
 
             buttonSave.Text = Translate.GetTranslate("frmSettings", "BUTTON_SAVE");
             buttonCancel.Text = Translate.GetTranslate("frmSettings", "BUTTON_CANCEL");
 
-        private void customAreaCheckbox_CheckedChanged(object sender, EventArgs e)
-        {
-            if (this.customAreaCheckbox.Checked)
-            {
-                this.btnSetScanArea.Enabled = true;
-                this.txtMinXY.Enabled = true;
-                this.txtMaxXY.Enabled = true;
-            }
-            else
-            {
-                this.btnSetScanArea.Enabled = false;
-                this.txtMinXY.Enabled = false;
-                this.txtMaxXY.Enabled = false;
-            }
-        }
-
-        private void frmSettings_Load(object sender, EventArgs e)
-        {
             /*
-             * Set Text from translate file
+             * Set Settings from save
              */
-            this.Text = Translate.GetTranslate("frmSettings", "TITLE");
-
-            this.tabSettings.TabPages[(int)TabulationIndex.GeneralFishing].Text = Translate.GetTranslate("frmSettings", "TAB_TITLE_GENERAL_FISHING");
-            this.tabSettings.TabPages[(int)TabulationIndex.FindCursor].Text = Translate.GetTranslate("frmSettings", "TAB_TITLE_FIND_CURSOR");
-            this.tabSettings.TabPages[(int)TabulationIndex.HearingFishing].Text = Translate.GetTranslate("frmSettings", "TAB_TITLE_HEARING_FISH");
-            this.tabSettings.TabPages[(int)TabulationIndex.Premium].Text = Translate.GetTranslate("frmSettings", "TAB_TITLE_PREMIUM");
-            this.tabSettings.TabPages[(int)TabulationIndex.AntiAfk].Text = Translate.GetTranslate("frmSettings", "TAB_TITLE_ANTI_AFK");
-            this.tabSettings.TabPages[(int)TabulationIndex.Language].Text = Translate.GetTranslate("frmSettings", "TAB_TITLE_LANGUAGE");
 
             /// General
             txtCastDelayLow.Text = Properties.Settings.Default.CastingDelayLow.ToString();
@@ -271,13 +220,12 @@ namespace UltimateFishBot.Forms
             txtAntiAfkTimer.Text = Properties.Settings.Default.AntiAfkTime.ToString();
             cmbMovements.SelectedIndex = Properties.Settings.Default.AntiAfkMoves;
 
-            this.LoadAntiAfkMovements();
-            this.cbAntiAfk.Text = Translate.GetTranslate("frmSettings", "CB_ANTI_AFK");
+            /// Languages
+            chkTxt2speech.Checked = Properties.Settings.Default.Txt2speech;
+            LoadLanguages();
 
-            /// Language Settings
 
-            this.labelLanguage.Text = Translate.GetTranslate("frmSettings", "LABEL_LANGUAGE");
-            this.labelLanguageDesc.Text = Translate.GetTranslate("frmSettings", "LABEL_LANGUAGE_DESC");
+        }
 
         private void buttonCancel_Click(object sender, EventArgs e)
         {
@@ -306,7 +254,7 @@ namespace UltimateFishBot.Forms
             Properties.Settings.Default.AlternativeRoute = cmbAlternativeRoute.Checked;
             Properties.Settings.Default.customScanArea = customAreaCheckbox.Checked;
             Properties.Settings.Default.CursorCaptureHotKey = (Keys)new KeysConverter().ConvertFromString(ccHotKey.Text);
-            
+
 
             /// Hearing the Fish
             Properties.Settings.Default.SplashLimit = int.Parse(txtSplash.Text);
@@ -314,10 +262,6 @@ namespace UltimateFishBot.Forms
             Properties.Settings.Default.AverageSound = cbSoundAvg.Checked;
 
             /// Premium Settings
-            this.txtProcName.Text = Settings.Default.ProcName;
-            this.cbAutoLure.Checked = Settings.Default.AutoLure;
-            this.cbHearth.Checked = Settings.Default.SwapGear;
-            this.cbAlt.Checked = Settings.Default.UseAltKey;
 
             Properties.Settings.Default.ProcName = txtProcName.Text;
             Properties.Settings.Default.AutoLure = cbAutoLure.Checked;
@@ -381,99 +325,84 @@ namespace UltimateFishBot.Forms
                 this.Close();
             }
 
-            /// Languages
-            this.chkTxt2speech.Checked = Settings.Default.Txt2speech;
-            this.LoadLanguages();
         }
 
-        private void LoadAntiAfkMovements()
+        private void tabSettings_SelectedIndexChanged(Object sender, EventArgs e)
         {
-            this.cmbMovements.Items.Clear();
-
-            foreach (var movements in Translate.GetTranslates("frmSettings", "CMB_ANTIAFK_MOVE")) this.cmbMovements.Items.Add(movements);
+            tmeAudio.Enabled = (tabSettings.SelectedIndex == 2);
         }
 
         private void LoadAudioDevices()
         {
-            var audioDevices = new List<Tuple<string, string>>();
-            audioDevices.Add(new Tuple<string, string>("Default", string.Empty));
+            List<Tuple<string, string>> audioDevices = new List<Tuple<string, string>>();
+            audioDevices.Add(new Tuple<string, string>("Default", ""));
 
             try
             {
-                var sndDevEnum = new MMDeviceEnumerator();
-                var audioCollection = sndDevEnum.EnumerateAudioEndPoints(EDataFlow.eRender, EDeviceState.DEVICE_STATEMASK_ALL);
+                MMDeviceEnumerator sndDevEnum = new MMDeviceEnumerator();
+                MMDeviceCollection audioCollection = sndDevEnum.EnumerateAudioEndPoints(EDataFlow.eRender, EDeviceState.DEVICE_STATEMASK_ALL);
 
                 // Try to add each audio endpoint to our collection
-                for (var i = 0; i < audioCollection.Count; ++i)
+                for (int i = 0; i < audioCollection.Count; ++i)
                 {
-                    var device = audioCollection[i];
+                    MMDevice device = audioCollection[i];
                     audioDevices.Add(new Tuple<string, string>(device.FriendlyName, device.ID));
                 }
             }
             catch (Exception)
-            {
-            }
+            { }
 
             // Setup the display
-            this.cmbAudio.Items.Clear();
-            this.cmbAudio.DisplayMember = "Item1";
-            this.cmbAudio.ValueMember = "Item2";
-            this.cmbAudio.DataSource = audioDevices;
-            this.cmbAudio.SelectedValue = Settings.Default.AudioDevice;
-        }
-
-        private void LoadHotKeys()
-        {
-            this.m_hotkey = Settings.Default.StartStopHotKey;
-            this.txtHotKey.Text = new KeysConverter().ConvertToString(this.m_hotkey);
+            cmbAudio.Items.Clear();
+            cmbAudio.DisplayMember = "Item1";
+            cmbAudio.ValueMember = "Item2";
+            cmbAudio.DataSource = audioDevices;
+            cmbAudio.SelectedValue = Properties.Settings.Default.AudioDevice;
         }
 
         private void LoadLanguages()
         {
-            var languageFiles = Directory.GetFiles("./Resources/", "*.xml");
-            this.cmbLanguage.Items.Clear();
+            string[] languageFiles = Directory.GetFiles("./Resources/", "*.xml");
+            cmbLanguage.Items.Clear();
 
-            foreach (var file in languageFiles)
+            foreach (string file in languageFiles)
             {
-                var tmpFile = file.Substring(12); // Remove the "./Resources/" part
+                string tmpFile = file.Substring(12); // Remove the "./Resources/" part
                 tmpFile = tmpFile.Substring(0, tmpFile.Length - 4); // Remove the  ".xml" part
-                this.cmbLanguage.Items.Add(tmpFile);
+                cmbLanguage.Items.Add(tmpFile);
             }
 
-            this.cmbLanguage.SelectedItem = Settings.Default.Language;
+            cmbLanguage.SelectedItem = Properties.Settings.Default.Language;
         }
 
-        private void SaveHotKeys()
+        private void LoadAntiAfkMovements()
         {
-            Settings.Default.StartStopHotKey = this.m_hotkey;
-            this.m_mainForm.ReloadHotkeys();
-        }
+            cmbMovements.Items.Clear();
 
-        private void tabSettings_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            this.tmeAudio.Enabled = this.tabSettings.SelectedIndex == 2;
+            foreach (string movements in Translate.GetTranslates("frmSettings", "CMB_ANTIAFK_MOVE"))
+                cmbMovements.Items.Add(movements);
         }
 
         private void tmeAudio_Tick(Object sender, EventArgs e)
         {
-            if (this.m_SndDevice != null)
+            if (m_SndDevice != null)
             {
                 try
                 {
-                    var currentVolumnLevel = (int)(this.m_SndDevice.AudioMeterInformation.MasterPeakValue * 100);
-                    this.pgbSoundLevel.Value = currentVolumnLevel;
-                    this.lblAudioLevel.Text = currentVolumnLevel.ToString();
+                    int currentVolumnLevel = (int)(m_SndDevice.AudioMeterInformation.MasterPeakValue * 100);
+                    pgbSoundLevel.Value = currentVolumnLevel;
+                    lblAudioLevel.Text = currentVolumnLevel.ToString();
                 }
                 catch (Exception)
                 {
-                    this.pgbSoundLevel.Value = 0;
-                    this.lblAudioLevel.Text = "0";
+                    pgbSoundLevel.Value = 0;
+                    lblAudioLevel.Text = "0";
                 }
             }
             else
             {
-                this.pgbSoundLevel.Value = 0;
-                this.lblAudioLevel.Text = "0";
+                pgbSoundLevel.Value = 0;
+                lblAudioLevel.Text = "0";
             }
         }
 
@@ -502,8 +431,8 @@ namespace UltimateFishBot.Forms
 
         private void txtHotKey_KeyDown(object sender, KeyEventArgs e)
         {
-            this.m_hotkey = e.KeyData;
-            this.txtHotKey.Text = new KeysConverter().ConvertToString(this.m_hotkey);
+            m_hotkey = e.KeyData;
+            txtHotKey.Text = new KeysConverter().ConvertToString(m_hotkey);
         }
 
         private void customAreaCheckbox_CheckedChanged(object sender, EventArgs e)

@@ -25,7 +25,8 @@ namespace UltimateFishBot.BodyParts
             UpdateKeys();
         }
 
-        public void SetWow(IntPtr wowWindow) {
+        public void SetWow(IntPtr wowWindow)
+        {
             _wow = wowWindow;
         }
 
@@ -45,9 +46,12 @@ namespace UltimateFishBot.BodyParts
 
         public async Task Cast(CancellationToken token)
         {
-            if (Properties.Settings.Default.RightClickCast)  {
+            if (Properties.Settings.Default.RightClickCast)
+            {
                 Win32.SendMouseDblRightClick(_wow);
-            } else {
+            }
+            else
+            {
                 Win32.SendKey(Properties.Settings.Default.FishKey);
                 Log.Information("Sent key: " + Properties.Settings.Default.FishKey);
             }
@@ -72,45 +76,44 @@ namespace UltimateFishBot.BodyParts
 
         public async Task DoAction(NeededAction action, Mouth mouth, CancellationToken cancellationToken)
         {
-            string actionKey;
-
-            int sleepTime;
+            string actionKey = "";
+            int sleepTime = 0;
 
             switch (action)
             {
                 case NeededAction.HearthStone:
                     {
-                        actionKey = Settings.Default.HearthKey;
+                        actionKey = Properties.Settings.Default.HearthKey;
                         mouth.Say(Translate.GetTranslate("manager", "LABEL_HEARTHSTONE"));
                         sleepTime = 0;
                         break;
                     }
                 case NeededAction.Lure:
                     {
-                        actionKey = Settings.Default.LureKey;
+                        actionKey = Properties.Settings.Default.LureKey;
                         mouth.Say(Translate.GetTranslate("manager", "LABEL_APPLY_LURE"));
                         sleepTime = 3;
                         break;
                     }
                 case NeededAction.Charm:
                     {
-                        actionKey = Settings.Default.CharmKey;
+                        actionKey = Properties.Settings.Default.CharmKey;
                         mouth.Say(Translate.GetTranslate("manager", "LABEL_APPLY_CHARM"));
                         sleepTime = 3;
                         break;
                     }
                 case NeededAction.Raft:
                     {
-                        actionKey = Settings.Default.RaftKey;
+                        actionKey = Properties.Settings.Default.RaftKey;
                         mouth.Say(Translate.GetTranslate("manager", "LABEL_APPLY_RAFT"));
                         sleepTime = 2;
                         break;
                     }
                 case NeededAction.Bait:
                     {
-                        var index = 0;
+                        int baitIndex = 0;
 
-                        if (Settings.Default.CycleThroughBaitList)
+                        if (Properties.Settings.Default.CycleThroughBaitList)
                         {
                             if (_mBaitIndex >= 6)
                                 _mBaitIndex = 0;
@@ -123,7 +126,6 @@ namespace UltimateFishBot.BodyParts
                         sleepTime = 3;
                         break;
                     }
-
                 default:
                     return;
             }
@@ -132,28 +134,8 @@ namespace UltimateFishBot.BodyParts
             Win32.ActivateWow(_wow);
             await Task.Delay(1000, cancellationToken);
             Win32.SendKey(actionKey);
-            Log.Information("Sent key: "+actionKey);
+            Log.Information("Sent key: " + actionKey);
             await Task.Delay(sleepTime * 1000, cancellationToken);
-        }
-
-        public void Loot()
-        {
-            Win32.SendMouseClick();
-            Thread.Sleep(Settings.Default.LootingDelay);
-        }
-
-        public void ResetBaitIndex()
-        {
-            this.baitIndex = 0;
-        }
-
-        public void UpdateKeys()
-        {
-            this.baitKeys = new[]
-                                {
-                                    Settings.Default.BaitKey1, Settings.Default.BaitKey2, Settings.Default.BaitKey3, Settings.Default.BaitKey4,
-                                    Settings.Default.BaitKey5, Settings.Default.BaitKey6, Settings.Default.BaitKey7
-                                };
         }
     }
 }

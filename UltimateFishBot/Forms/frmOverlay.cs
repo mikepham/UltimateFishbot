@@ -4,104 +4,186 @@ using System.Windows.Forms;
 
 namespace UltimateFishBot.Forms
 {
-    using System;
-    using System.Drawing;
-    using System.Windows.Forms;
 
-    using UltimateFishBot.Classes;
-    using UltimateFishBot.Properties;
 
     public partial class frmOverlay : Form
     {
+        #region:::::::::::::::::::::::::::::::::::::::::::Create Singleton:::::::::::::::::::::::::::::::::::::::::::
         private static frmOverlay inst;
+        public static frmOverlay GetForm(frmSettings settings)
+        {
+            if (inst == null || inst.IsDisposed)
+                inst = new frmOverlay(settings);
+            return inst;
+        }
+        #endregion
 
-        public Point ClickPoint;
+        #region:::::::::::::::::::::::::::::::::::::::::::Form level declarations:::::::::::::::::::::::::::::::::::::::::::
 
+        public enum CursPos : int
+        {
+
+            WithinSelectionArea = 0,
+            OutsideSelectionArea,
+            TopLine,
+            BottomLine,
+            LeftLine,
+            RightLine,
+            TopLeft,
+            TopRight,
+            BottomLeft,
+            BottomRight
+
+        }
+
+        public enum ClickAction : int
+        {
+
+            NoClick = 0,
+            Dragging,
+            Outside,
+            TopSizing,
+            BottomSizing,
+            LeftSizing,
+            TopLeftSizing,
+            BottomLeftSizing,
+            RightSizing,
+            TopRightSizing,
+            BottomRightSizing
+
+        }
+
+        private frmSettings settings;
         public ClickAction CurrentAction;
+        public bool LeftButtonDown = false;
+        public bool RectangleDrawn = false;
+        public bool ReadyToDrag = false;
 
-        public Point CurrentBottomRight;
+        public Point ClickPoint = new Point();
+        public Point CurrentTopLeft = new Point();
+        public Point CurrentBottomRight = new Point();
+        public Point DragClickRelative = new Point();
 
-        public Point CurrentTopLeft;
-
-        public Point DragClickRelative;
-
-        public bool LeftButtonDown;
-
-        public int PrimMon;
-
-        public bool ReadyToDrag;
-
-        public bool RectangleDrawn;
+        public int RectangleHeight = new int();
+        public int RectangleWidth = new int();
+        public int PrimMon = 0;
+        public int showMon = 0;
 
         private Graphics g;
         private Pen MyPen = new Pen(Color.White, 1);
         private Pen EraserPen = new Pen(Color.FromArgb(0, 0, 0), 20);
 
-        public int RectangleWidth;
+        protected override void OnMouseClick(MouseEventArgs e)
+        {
 
-        public int showMon;
+            if (e.Button == MouseButtons.Right)
+            {
 
-        private Pen EraserPen = new Pen(Color.FromArgb(0, 0, 0), 20);
+                e = null;
 
-        private readonly Graphics g;
+            }
 
-        private Pen MyPen = new Pen(Color.White, 1);
+            base.OnMouseClick(e);
 
-        private readonly frmSettings settings;
+        }
 
+        #endregion
+
+        #region:::::::::::::::::::::::::::::::::::::::::::Mouse Event Handlers & Drawing Initialization:::::::::::::::::::::::::::::::::::::::::::
         public frmOverlay(frmSettings settings)
         {
-            this.InitializeComponent();
+
+            InitializeComponent();
             this.settings = settings;
-            this.MouseDown += this.mouse_Click;
-            this.MouseUp += this.mouse_Up;
-            this.MouseMove += this.mouse_Move;
-            this.KeyUp += this.key_press;
-            this.DoubleClick += this.mouse_dClick;
-            this.g = this.CreateGraphics();
+            this.MouseDown += new MouseEventHandler(mouse_Click);
+            this.MouseUp += new MouseEventHandler(mouse_Up);
+            this.MouseMove += new MouseEventHandler(mouse_Move);
+            this.KeyUp += new KeyEventHandler(key_press);
+            this.DoubleClick += new EventHandler(mouse_dClick);
+            g = this.CreateGraphics();
 
-            this.PrimMon = this.GetPrimaryMonIdx();
-            this.showMon = this.PrimMon;
+            PrimMon = GetPrimaryMonIdx();
+            showMon = PrimMon;
+
         }
 
-        public enum ClickAction
+        #endregion
+
+        private void initPoints()
         {
-            NoClick = 0, 
+            ClickPoint.X = 0;
+            ClickPoint.Y = 0;
 
-            Dragging, 
+            DragClickRelative.X = 0;
+            DragClickRelative.Y = 0;
 
-            Outside, 
+            CurrentTopLeft.X = 0;
+            CurrentTopLeft.Y = 0;
+            CurrentBottomRight.X = 0;
+            CurrentBottomRight.Y = 0;
+            RectangleWidth = 0;
+            RectangleHeight = 0;
 
-            TopSizing, 
+            LeftButtonDown = false;
+            RectangleDrawn = false;
+            ReadyToDrag = false;
 
-            BottomSizing, 
+            this.Cursor = Cursors.Arrow;
 
-            LeftSizing, 
-
-            TopLeftSizing, 
-
-            BottomLeftSizing, 
-
-            RightSizing, 
-
-            TopRightSizing, 
-
-            BottomRightSizing
         }
 
-        public enum CursPos
+        private int GetPrimaryMonIdx()
         {
-            WithinSelectionArea = 0, 
+            Screen[] sc;
+            sc = Screen.AllScreens;
+            int idx = 0;
 
-            OutsideSelectionArea, 
+            foreach (Screen s in sc)
+            {
+                if (s.Bounds.Left == System.Windows.Forms.Screen.PrimaryScreen.Bounds.Left)
+                    break;
+                else
+                    idx++;
+            }
 
-            TopLine, 
+            return (idx <= sc.Length) ? idx : 0;
+        }
 
-            BottomLine, 
 
-            LeftLine, 
+        private void InvertColors()
+        {
+            g.DrawRectangle(EraserPen, GetX(CurrentTopLeft.X), CurrentTopLeft.Y, GetX(CurrentBottomRight.X) - GetX(CurrentTopLeft.X), CurrentBottomRight.Y - CurrentTopLeft.Y);
 
-            RightLine, 
+            if (this.BackColor == Color.Black)
+            {
+                this.BackColor = Color.Yellow;
+                MyPen.Dispose();
+                EraserPen.Dispose();
+                MyPen = new Pen(Color.Black, 1);
+                EraserPen = new Pen(Color.Yellow, 20);
+            }
+            else
+            {
+                this.BackColor = Color.Black;
+                MyPen.Dispose();
+                EraserPen.Dispose();
+                MyPen = new Pen(Color.White, 1);
+                EraserPen = new Pen(Color.Black, 20);
+            }
+
+            Application.DoEvents();
+
+            //Draw a new rectangle
+            g.DrawRectangle(MyPen, GetX(CurrentTopLeft.X), CurrentTopLeft.Y, GetX(CurrentBottomRight.X) - GetX(CurrentTopLeft.X), CurrentBottomRight.Y - CurrentTopLeft.Y);
+        }
+
+
+        private void SaveSelection()
+        {
+            if ((CurrentBottomRight.X - CurrentTopLeft.X) < 60 || (CurrentBottomRight.Y - CurrentTopLeft.Y) < 60)
+            {
+
+                MessageBox.Show(Translate.GetTranslate("frmSettings", "AREA_SMALL"), "Error");
 
             }
             else
@@ -112,15 +194,23 @@ namespace UltimateFishBot.Forms
                 settings.txtMinXY.Text = CurrentTopLeft.ToString();
                 settings.txtMaxXY.Text = CurrentBottomRight.ToString();
 
-            BottomLeft, 
+            }
 
-            BottomRight
+            this.Close();
         }
 
-        public static frmOverlay GetForm(frmSettings settings)
+        private void init_FullScreen()
         {
-            if (inst == null || inst.IsDisposed) inst = new frmOverlay(settings);
-            return inst;
+            Screen[] sc;
+            sc = Screen.AllScreens;
+
+            CurrentTopLeft.X = sc[showMon].Bounds.Left;
+            CurrentTopLeft.Y = sc[showMon].Bounds.Top;
+            if (showMon != PrimMon)
+                CurrentBottomRight.X = sc[showMon].Bounds.Width + sc[showMon].Bounds.Left;
+            else
+                CurrentBottomRight.X = sc[showMon].Bounds.Width;
+            CurrentBottomRight.Y = sc[showMon].Bounds.Height;
         }
 
         public void key_press(object sender, KeyEventArgs e)
@@ -129,80 +219,140 @@ namespace UltimateFishBot.Forms
             {
                 this.Close();
             }
-            else if (e.KeyCode == Keys.Z) this.InvertColors();
-            else if (e.KeyCode == Keys.Enter) this.SaveSelection();
+            else if (e.KeyCode == Keys.Z)
+                InvertColors();
+            else if (e.KeyCode == Keys.Enter)
+                SaveSelection();
         }
 
-        protected override void OnMouseClick(MouseEventArgs e)
+        #region:::::::::::::::::::::::::::::::::::::::::::Mouse Buttons:::::::::::::::::::::::::::::::::::::::::::
+
+        private void mouse_Click(object sender, MouseEventArgs e)
         {
-            if (e.Button == MouseButtons.Right)
+
+            if (e.Button == MouseButtons.Left)
             {
-                e = null;
+
+                SetClickAction();
+                LeftButtonDown = true;
+                ClickPoint = new Point(System.Windows.Forms.Control.MousePosition.X, System.Windows.Forms.Control.MousePosition.Y);
+
+                if (RectangleDrawn)
+                {
+
+                    RectangleHeight = CurrentBottomRight.Y - CurrentTopLeft.Y;
+                    RectangleWidth = CurrentBottomRight.X - CurrentTopLeft.X;
+                    DragClickRelative.X = Cursor.Position.X - CurrentTopLeft.X;
+                    DragClickRelative.Y = Cursor.Position.Y - CurrentTopLeft.Y;
+
+                }
+
+            }
+        }
+
+        private void mouse_dClick(object sender, EventArgs e)
+        {
+            SaveSelection();
+        }
+
+        private void mouse_Up(object sender, MouseEventArgs e)
+        {
+
+            RectangleDrawn = true;
+            LeftButtonDown = false;
+            CurrentAction = ClickAction.NoClick;
+
+        }
+        #endregion
+
+        #region:::::::::::::::::::::::::::::::::::::::::::Resizing and Moving:::::::::::::::::::::::::::::::::::::::::::
+        private void mouse_Move(object sender, MouseEventArgs e)
+        {
+
+            if (LeftButtonDown && !RectangleDrawn)
+            {
+
+                DrawSelection();
+
             }
 
-            base.OnMouseClick(e);
+            if (RectangleDrawn)
+            {
+
+                CursorPosition();
+
+                if (CurrentAction == ClickAction.Dragging)
+                {
+                    DragSelection();
+                }
+
+                if (CurrentAction != ClickAction.Dragging && CurrentAction != ClickAction.Outside)
+                {
+                    ResizeSelection();
+                }
+            }
         }
 
         private CursPos CursorPosition()
         {
-            if (Cursor.Position.X > this.CurrentTopLeft.X - 10 && Cursor.Position.X < this.CurrentTopLeft.X + 10
-                && (Cursor.Position.Y > this.CurrentTopLeft.Y + 10) && (Cursor.Position.Y < this.CurrentBottomRight.Y - 10))
+            if (((Cursor.Position.X > CurrentTopLeft.X - 10 && Cursor.Position.X < CurrentTopLeft.X + 10)) && ((Cursor.Position.Y > CurrentTopLeft.Y + 10) && (Cursor.Position.Y < CurrentBottomRight.Y - 10)))
             {
+
                 this.Cursor = Cursors.SizeWE;
                 return CursPos.LeftLine;
-            }
 
-            if (Cursor.Position.X >= this.CurrentTopLeft.X - 10 && Cursor.Position.X <= this.CurrentTopLeft.X + 10
-                && (Cursor.Position.Y >= this.CurrentTopLeft.Y - 10) && (Cursor.Position.Y <= this.CurrentTopLeft.Y + 10))
+            }
+            if (((Cursor.Position.X >= CurrentTopLeft.X - 10 && Cursor.Position.X <= CurrentTopLeft.X + 10)) && ((Cursor.Position.Y >= CurrentTopLeft.Y - 10) && (Cursor.Position.Y <= CurrentTopLeft.Y + 10)))
             {
+
                 this.Cursor = Cursors.SizeNWSE;
                 return CursPos.TopLeft;
-            }
 
-            if (Cursor.Position.X >= this.CurrentTopLeft.X - 10 && Cursor.Position.X <= this.CurrentTopLeft.X + 10
-                && (Cursor.Position.Y >= this.CurrentBottomRight.Y - 10) && (Cursor.Position.Y <= this.CurrentBottomRight.Y + 10))
+            }
+            if (((Cursor.Position.X >= CurrentTopLeft.X - 10 && Cursor.Position.X <= CurrentTopLeft.X + 10)) && ((Cursor.Position.Y >= CurrentBottomRight.Y - 10) && (Cursor.Position.Y <= CurrentBottomRight.Y + 10)))
             {
+
                 this.Cursor = Cursors.SizeNESW;
                 return CursPos.BottomLeft;
-            }
 
-            if (Cursor.Position.X > this.CurrentBottomRight.X - 10 && Cursor.Position.X < this.CurrentBottomRight.X + 10
-                && (Cursor.Position.Y > this.CurrentTopLeft.Y + 10) && (Cursor.Position.Y < this.CurrentBottomRight.Y - 10))
+            }
+            if (((Cursor.Position.X > CurrentBottomRight.X - 10 && Cursor.Position.X < CurrentBottomRight.X + 10)) && ((Cursor.Position.Y > CurrentTopLeft.Y + 10) && (Cursor.Position.Y < CurrentBottomRight.Y - 10)))
             {
+
                 this.Cursor = Cursors.SizeWE;
                 return CursPos.RightLine;
-            }
 
-            if (Cursor.Position.X >= this.CurrentBottomRight.X - 10 && Cursor.Position.X <= this.CurrentBottomRight.X + 10
-                && (Cursor.Position.Y >= this.CurrentTopLeft.Y - 10) && (Cursor.Position.Y <= this.CurrentTopLeft.Y + 10))
+            }
+            if (((Cursor.Position.X >= CurrentBottomRight.X - 10 && Cursor.Position.X <= CurrentBottomRight.X + 10)) && ((Cursor.Position.Y >= CurrentTopLeft.Y - 10) && (Cursor.Position.Y <= CurrentTopLeft.Y + 10)))
             {
+
                 this.Cursor = Cursors.SizeNESW;
                 return CursPos.TopRight;
-            }
 
-            if (Cursor.Position.X >= this.CurrentBottomRight.X - 10 && Cursor.Position.X <= this.CurrentBottomRight.X + 10
-                && (Cursor.Position.Y >= this.CurrentBottomRight.Y - 10) && (Cursor.Position.Y <= this.CurrentBottomRight.Y + 10))
+            }
+            if (((Cursor.Position.X >= CurrentBottomRight.X - 10 && Cursor.Position.X <= CurrentBottomRight.X + 10)) && ((Cursor.Position.Y >= CurrentBottomRight.Y - 10) && (Cursor.Position.Y <= CurrentBottomRight.Y + 10)))
             {
+
                 this.Cursor = Cursors.SizeNWSE;
                 return CursPos.BottomRight;
-            }
 
-            if ((Cursor.Position.Y > this.CurrentTopLeft.Y - 10) && (Cursor.Position.Y < this.CurrentTopLeft.Y + 10)
-                && Cursor.Position.X > this.CurrentTopLeft.X + 10 && Cursor.Position.X < this.CurrentBottomRight.X - 10)
+            }
+            if (((Cursor.Position.Y > CurrentTopLeft.Y - 10) && (Cursor.Position.Y < CurrentTopLeft.Y + 10)) && ((Cursor.Position.X > CurrentTopLeft.X + 10 && Cursor.Position.X < CurrentBottomRight.X - 10)))
             {
+
                 this.Cursor = Cursors.SizeNS;
                 return CursPos.TopLine;
-            }
 
-            if ((Cursor.Position.Y > this.CurrentBottomRight.Y - 10) && (Cursor.Position.Y < this.CurrentBottomRight.Y + 10)
-                && Cursor.Position.X > this.CurrentTopLeft.X + 10 && Cursor.Position.X < this.CurrentBottomRight.X - 10)
+            }
+            if (((Cursor.Position.Y > CurrentBottomRight.Y - 10) && (Cursor.Position.Y < CurrentBottomRight.Y + 10)) && ((Cursor.Position.X > CurrentTopLeft.X + 10 && Cursor.Position.X < CurrentBottomRight.X - 10)))
             {
+
                 this.Cursor = Cursors.SizeNS;
                 return CursPos.BottomLine;
-            }
 
-            if (Cursor.Position.X >= this.CurrentTopLeft.X + 10 && Cursor.Position.X <= this.CurrentBottomRight.X - 10
-                && Cursor.Position.Y >= this.CurrentTopLeft.Y + 10 && Cursor.Position.Y <= this.CurrentBottomRight.Y - 10)
+            }
+            if (
+                (Cursor.Position.X >= CurrentTopLeft.X + 10 && Cursor.Position.X <= CurrentBottomRight.X - 10) && (Cursor.Position.Y >= CurrentTopLeft.Y + 10 && Cursor.Position.Y <= CurrentBottomRight.Y - 10))
             {
                 this.Cursor = Cursors.Hand;
                 return CursPos.WithinSelectionArea;
@@ -212,181 +362,187 @@ namespace UltimateFishBot.Forms
             return CursPos.OutsideSelectionArea;
         }
 
+        private void SetClickAction()
+        {
+
+            switch (CursorPosition())
+            {
+                case CursPos.BottomLine:
+                    CurrentAction = ClickAction.BottomSizing;
+                    break;
+                case CursPos.TopLine:
+                    CurrentAction = ClickAction.TopSizing;
+                    break;
+                case CursPos.LeftLine:
+                    CurrentAction = ClickAction.LeftSizing;
+                    break;
+                case CursPos.TopLeft:
+                    CurrentAction = ClickAction.TopLeftSizing;
+                    break;
+                case CursPos.BottomLeft:
+                    CurrentAction = ClickAction.BottomLeftSizing;
+                    break;
+                case CursPos.RightLine:
+                    CurrentAction = ClickAction.RightSizing;
+                    break;
+                case CursPos.TopRight:
+                    CurrentAction = ClickAction.TopRightSizing;
+                    break;
+                case CursPos.BottomRight:
+                    CurrentAction = ClickAction.BottomRightSizing;
+                    break;
+                case CursPos.WithinSelectionArea:
+                    CurrentAction = ClickAction.Dragging;
+                    break;
+                case CursPos.OutsideSelectionArea:
+                    CurrentAction = ClickAction.Outside;
+                    break;
+            }
+
+        }
+
+        private void ResizeSelection()
+        {
+
+            if (CurrentAction == ClickAction.LeftSizing)
+            {
+
+                if (Cursor.Position.X < CurrentBottomRight.X - 10)
+                {
+
+                    //Erase the previous rectangle
+                    g.DrawRectangle(EraserPen, GetX(CurrentTopLeft.X), CurrentTopLeft.Y, RectangleWidth, RectangleHeight);
+                    CurrentTopLeft.X = Cursor.Position.X;
+                    RectangleWidth = CurrentBottomRight.X - CurrentTopLeft.X;
+                    g.DrawRectangle(MyPen, GetX(CurrentTopLeft.X), CurrentTopLeft.Y, RectangleWidth, RectangleHeight);
+
+                }
+
+            }
+            if (CurrentAction == ClickAction.TopLeftSizing)
+            {
+
+                if (Cursor.Position.X < CurrentBottomRight.X - 10 && Cursor.Position.Y < CurrentBottomRight.Y - 10)
+                {
+
+                    //Erase the previous rectangle
+                    g.DrawRectangle(EraserPen, GetX(CurrentTopLeft.X), CurrentTopLeft.Y, RectangleWidth, RectangleHeight);
+                    CurrentTopLeft.X = Cursor.Position.X;
+                    CurrentTopLeft.Y = Cursor.Position.Y;
+                    RectangleWidth = CurrentBottomRight.X - CurrentTopLeft.X;
+                    RectangleHeight = CurrentBottomRight.Y - CurrentTopLeft.Y;
+                    g.DrawRectangle(MyPen, GetX(CurrentTopLeft.X), CurrentTopLeft.Y, RectangleWidth, RectangleHeight);
+
+                }
+            }
+            if (CurrentAction == ClickAction.BottomLeftSizing)
+            {
+
+                if (Cursor.Position.X < CurrentBottomRight.X - 10 && Cursor.Position.Y > CurrentTopLeft.Y + 10)
+                {
+
+                    //Erase the previous rectangle
+                    g.DrawRectangle(EraserPen, GetX(CurrentTopLeft.X), CurrentTopLeft.Y, RectangleWidth, RectangleHeight);
+                    CurrentTopLeft.X = Cursor.Position.X;
+                    CurrentBottomRight.Y = Cursor.Position.Y;
+                    RectangleWidth = CurrentBottomRight.X - CurrentTopLeft.X;
+                    RectangleHeight = CurrentBottomRight.Y - CurrentTopLeft.Y;
+                    g.DrawRectangle(MyPen, GetX(CurrentTopLeft.X), CurrentTopLeft.Y, RectangleWidth, RectangleHeight);
+
+                }
+
+            }
+            if (CurrentAction == ClickAction.RightSizing)
+            {
+
+                if (Cursor.Position.X > CurrentTopLeft.X + 10)
+                {
+
+                    //Erase the previous rectangle
+                    g.DrawRectangle(EraserPen, GetX(CurrentTopLeft.X), CurrentTopLeft.Y, RectangleWidth, RectangleHeight);
+                    CurrentBottomRight.X = Cursor.Position.X;
+                    RectangleWidth = CurrentBottomRight.X - CurrentTopLeft.X;
+                    g.DrawRectangle(MyPen, GetX(CurrentTopLeft.X), CurrentTopLeft.Y, RectangleWidth, RectangleHeight);
+
+                }
+            }
+            if (CurrentAction == ClickAction.TopRightSizing)
+            {
+
+                if (Cursor.Position.X > CurrentTopLeft.X + 10 && Cursor.Position.Y < CurrentBottomRight.Y - 10)
+                {
+
+                    //Erase the previous rectangle
+                    g.DrawRectangle(EraserPen, GetX(CurrentTopLeft.X), CurrentTopLeft.Y, RectangleWidth, RectangleHeight);
+                    CurrentBottomRight.X = Cursor.Position.X;
+                    CurrentTopLeft.Y = Cursor.Position.Y;
+                    RectangleWidth = CurrentBottomRight.X - CurrentTopLeft.X;
+                    RectangleHeight = CurrentBottomRight.Y - CurrentTopLeft.Y;
+                    g.DrawRectangle(MyPen, GetX(CurrentTopLeft.X), CurrentTopLeft.Y, RectangleWidth, RectangleHeight);
+
+                }
+            }
+            if (CurrentAction == ClickAction.BottomRightSizing)
+            {
+
+                if (Cursor.Position.X > CurrentTopLeft.X + 10 && Cursor.Position.Y > CurrentTopLeft.Y + 10)
+                {
+
+                    //Erase the previous rectangle
+                    g.DrawRectangle(EraserPen, GetX(CurrentTopLeft.X), CurrentTopLeft.Y, RectangleWidth, RectangleHeight);
+                    CurrentBottomRight.X = Cursor.Position.X;
+                    CurrentBottomRight.Y = Cursor.Position.Y;
+                    RectangleWidth = CurrentBottomRight.X - CurrentTopLeft.X;
+                    RectangleHeight = CurrentBottomRight.Y - CurrentTopLeft.Y;
+                    g.DrawRectangle(MyPen, GetX(CurrentTopLeft.X), CurrentTopLeft.Y, RectangleWidth, RectangleHeight);
+
+                }
+            }
+            if (CurrentAction == ClickAction.TopSizing)
+            {
+
+                if (Cursor.Position.Y < CurrentBottomRight.Y - 10)
+                {
+
+                    //Erase the previous rectangle
+                    g.DrawRectangle(EraserPen, GetX(CurrentTopLeft.X), CurrentTopLeft.Y, RectangleWidth, RectangleHeight);
+                    CurrentTopLeft.Y = Cursor.Position.Y;
+                    RectangleHeight = CurrentBottomRight.Y - CurrentTopLeft.Y;
+                    g.DrawRectangle(MyPen, GetX(CurrentTopLeft.X), CurrentTopLeft.Y, RectangleWidth, RectangleHeight);
+
+                }
+            }
+            if (CurrentAction == ClickAction.BottomSizing)
+            {
+
+                if (Cursor.Position.Y > CurrentTopLeft.Y + 10)
+                {
+
+                    //Erase the previous rectangle
+                    g.DrawRectangle(EraserPen, GetX(CurrentTopLeft.X), CurrentTopLeft.Y, RectangleWidth, RectangleHeight);
+                    CurrentBottomRight.Y = Cursor.Position.Y;
+                    RectangleHeight = CurrentBottomRight.Y - CurrentTopLeft.Y;
+                    g.DrawRectangle(MyPen, GetX(CurrentTopLeft.X), CurrentTopLeft.Y, RectangleWidth, RectangleHeight);
+
+                }
+
+            }
+
+        }
+
         private void DragSelection()
         {
-            // Ensure that the rectangle stays within the bounds of the screen
+            //Ensure that the rectangle stays within the bounds of the screen
 
-            // Erase the previous rectangle
-            this.g.DrawRectangle(this.EraserPen, this.GetX(this.CurrentTopLeft.X), this.CurrentTopLeft.Y, this.RectangleWidth, this.RectangleHeight);
+            //Erase the previous rectangle
+            g.DrawRectangle(EraserPen, GetX(CurrentTopLeft.X), CurrentTopLeft.Y, RectangleWidth, RectangleHeight);
 
-            if (this.GetX(Cursor.Position.X) - this.DragClickRelative.X > 0
-                && this.GetX(Cursor.Position.X) - this.DragClickRelative.X + this.RectangleWidth < this.Width
-                
-                /*System.Windows.Forms.Screen.PrimaryScreen.Bounds.Width*/)
+            if (GetX(Cursor.Position.X) - DragClickRelative.X > 0 && GetX(Cursor.Position.X) - DragClickRelative.X + RectangleWidth < this.Width/*System.Windows.Forms.Screen.PrimaryScreen.Bounds.Width*/)
             {
-                this.CurrentTopLeft.X = Cursor.Position.X - this.DragClickRelative.X;
-                this.CurrentBottomRight.X = this.CurrentTopLeft.X + this.RectangleWidth;
-            }
-            else
 
-            // Selection area has reached the right side of the screen
-                if (this.GetX(Cursor.Position.X) - this.DragClickRelative.X > 0)
-                {
-                    this.CurrentTopLeft.X = this.Width /*System.Windows.Forms.Screen.PrimaryScreen.Bounds.Width*/- this.RectangleWidth;
-                    this.CurrentBottomRight.X = this.CurrentTopLeft.X + this.RectangleWidth;
-                }
+                CurrentTopLeft.X = Cursor.Position.X - DragClickRelative.X;
+                CurrentBottomRight.X = CurrentTopLeft.X + RectangleWidth;
 
-                // Selection area has reached the left side of the screen
-                else
-                {
-                    this.CurrentTopLeft.X = this.Left;
-                    this.CurrentBottomRight.X = this.CurrentTopLeft.X + this.RectangleWidth;
-                }
-
-            if (Cursor.Position.Y - this.DragClickRelative.Y > 0 && Cursor.Position.Y - this.DragClickRelative.Y + this.RectangleHeight < this.Width
-                
-                /*System.Windows.Forms.Screen.PrimaryScreen.Bounds.Height*/)
-            {
-                this.CurrentTopLeft.Y = Cursor.Position.Y - this.DragClickRelative.Y;
-                this.CurrentBottomRight.Y = this.CurrentTopLeft.Y + this.RectangleHeight;
-            }
-            else
-
-            // Selection area has reached the bottom of the screen
-                if (Cursor.Position.Y - this.DragClickRelative.Y > 0)
-                {
-                    this.CurrentTopLeft.Y = this.Height /*System.Windows.Forms.Screen.PrimaryScreen.Bounds.Height*/- this.RectangleHeight;
-                    this.CurrentBottomRight.Y = this.CurrentTopLeft.Y + this.RectangleHeight;
-                }
-
-                // Selection area has reached the top of the screen
-                else
-                {
-                    this.CurrentTopLeft.Y = 0;
-                    this.CurrentBottomRight.Y = this.CurrentTopLeft.Y + this.RectangleHeight;
-                }
-
-            // Draw a new rectangle
-            this.g.DrawRectangle(this.MyPen, this.GetX(this.CurrentTopLeft.X), this.CurrentTopLeft.Y, this.RectangleWidth, this.RectangleHeight);
-        }
-
-        private void DrawSelection()
-        {
-            this.Cursor = Cursors.Arrow;
-
-            // Erase the previous rectangle
-            this.g.DrawRectangle(
-                this.EraserPen, 
-                this.GetX(this.CurrentTopLeft.X), 
-                this.CurrentTopLeft.Y, 
-                this.GetX(this.CurrentBottomRight.X) - this.GetX(this.CurrentTopLeft.X), 
-                this.CurrentBottomRight.Y - this.CurrentTopLeft.Y);
-
-            // Calculate X Coordinates
-            if (Cursor.Position.X < this.ClickPoint.X)
-            {
-                this.CurrentTopLeft.X = Cursor.Position.X;
-                this.CurrentBottomRight.X = this.ClickPoint.X;
-            }
-            else
-            {
-                this.CurrentTopLeft.X = this.ClickPoint.X;
-                this.CurrentBottomRight.X = Cursor.Position.X;
-            }
-
-            // Calculate Y Coordinates
-            if (Cursor.Position.Y < this.ClickPoint.Y)
-            {
-                this.CurrentTopLeft.Y = Cursor.Position.Y;
-                this.CurrentBottomRight.Y = this.ClickPoint.Y;
-            }
-            else
-            {
-                this.CurrentTopLeft.Y = this.ClickPoint.Y;
-                this.CurrentBottomRight.Y = Cursor.Position.Y;
-            }
-
-            // Draw a new rectangle
-            this.g.DrawRectangle(
-                this.MyPen, 
-                this.GetX(this.CurrentTopLeft.X), 
-                this.CurrentTopLeft.Y, 
-                this.GetX(this.CurrentBottomRight.X) - this.GetX(this.CurrentTopLeft.X), 
-                this.CurrentBottomRight.Y - this.CurrentTopLeft.Y);
-        }
-
-        private int GetPrimaryMonIdx()
-        {
-            Screen[] sc;
-            sc = Screen.AllScreens;
-            var idx = 0;
-
-            foreach (var s in sc)
-            {
-                if (s.Bounds.Left == Screen.PrimaryScreen.Bounds.Left) break;
-                idx++;
-            }
-
-            return idx <= sc.Length ? idx : 0;
-        }
-
-        private int GetX(int X)
-        {
-            if (this.showMon == this.PrimMon) return X;
-            if (this.Left < 0) return X + Math.Abs(this.Left);
-            return X - Screen.PrimaryScreen.Bounds.Width;
-        }
-
-        private void init_FullScreen()
-        {
-            Screen[] sc;
-            sc = Screen.AllScreens;
-
-            this.CurrentTopLeft.X = sc[this.showMon].Bounds.Left;
-            this.CurrentTopLeft.Y = sc[this.showMon].Bounds.Top;
-            if (this.showMon != this.PrimMon) this.CurrentBottomRight.X = sc[this.showMon].Bounds.Width + sc[this.showMon].Bounds.Left;
-            else this.CurrentBottomRight.X = sc[this.showMon].Bounds.Width;
-            this.CurrentBottomRight.Y = sc[this.showMon].Bounds.Height;
-        }
-
-        private void initPoints()
-        {
-            this.ClickPoint.X = 0;
-            this.ClickPoint.Y = 0;
-
-            this.DragClickRelative.X = 0;
-            this.DragClickRelative.Y = 0;
-
-            this.CurrentTopLeft.X = 0;
-            this.CurrentTopLeft.Y = 0;
-            this.CurrentBottomRight.X = 0;
-            this.CurrentBottomRight.Y = 0;
-            this.RectangleWidth = 0;
-            this.RectangleHeight = 0;
-
-            this.LeftButtonDown = false;
-            this.RectangleDrawn = false;
-            this.ReadyToDrag = false;
-
-            this.Cursor = Cursors.Arrow;
-        }
-
-        private void InvertColors()
-        {
-            this.g.DrawRectangle(
-                this.EraserPen, 
-                this.GetX(this.CurrentTopLeft.X), 
-                this.CurrentTopLeft.Y, 
-                this.GetX(this.CurrentBottomRight.X) - this.GetX(this.CurrentTopLeft.X), 
-                this.CurrentBottomRight.Y - this.CurrentTopLeft.Y);
-
-            if (this.BackColor == Color.Black)
-            {
-                this.BackColor = Color.Yellow;
-                this.MyPen.Dispose();
-                this.EraserPen.Dispose();
-                this.MyPen = new Pen(Color.Black, 1);
-                this.EraserPen = new Pen(Color.Yellow, 20);
             }
             else
                 //Selection area has reached the right side of the screen
@@ -406,16 +562,12 @@ namespace UltimateFishBot.Forms
 
             }
 
-        private void mouse_dClick(object sender, EventArgs e)
-        {
-            this.SaveSelection();
-        }
-
-        private void mouse_Move(object sender, MouseEventArgs e)
-        {
-            if (this.LeftButtonDown && !this.RectangleDrawn)
+            if (Cursor.Position.Y - DragClickRelative.Y > 0 && Cursor.Position.Y - DragClickRelative.Y + RectangleHeight < this.Width/*System.Windows.Forms.Screen.PrimaryScreen.Bounds.Height*/)
             {
-                this.DrawSelection();
+
+                CurrentTopLeft.Y = Cursor.Position.Y - DragClickRelative.Y;
+                CurrentBottomRight.Y = CurrentTopLeft.Y + RectangleHeight;
+
             }
             else
                 //Selection area has reached the bottom of the screen
@@ -435,180 +587,66 @@ namespace UltimateFishBot.Forms
 
             }
 
-                if (this.CurrentAction != ClickAction.Dragging && this.CurrentAction != ClickAction.Outside)
-                {
-                    this.ResizeSelection();
-                }
-            }
+            //Draw a new rectangle
+            g.DrawRectangle(MyPen, GetX(CurrentTopLeft.X), CurrentTopLeft.Y, RectangleWidth, RectangleHeight);
+
         }
         #endregion
 
-        private void mouse_Up(object sender, MouseEventArgs e)
+        private int GetX(int X)
         {
-            this.RectangleDrawn = true;
-            this.LeftButtonDown = false;
-            this.CurrentAction = ClickAction.NoClick;
+            if (showMon == PrimMon)
+                return X;
+            else if (this.Left < 0)
+                return X + Math.Abs(this.Left);
+            else
+                return X - System.Windows.Forms.Screen.PrimaryScreen.Bounds.Width;
         }
 
-        private void ResizeSelection()
+        private void DrawSelection()
         {
-            if (this.CurrentAction == ClickAction.LeftSizing)
-            {
-                if (Cursor.Position.X < this.CurrentBottomRight.X - 10)
-                {
-                    // Erase the previous rectangle
-                    this.g.DrawRectangle(this.EraserPen, this.GetX(this.CurrentTopLeft.X), this.CurrentTopLeft.Y, this.RectangleWidth, this.RectangleHeight);
-                    this.CurrentTopLeft.X = Cursor.Position.X;
-                    this.RectangleWidth = this.CurrentBottomRight.X - this.CurrentTopLeft.X;
-                    this.g.DrawRectangle(this.MyPen, this.GetX(this.CurrentTopLeft.X), this.CurrentTopLeft.Y, this.RectangleWidth, this.RectangleHeight);
-                }
-            }
 
-            if (this.CurrentAction == ClickAction.TopLeftSizing)
-            {
-                if (Cursor.Position.X < this.CurrentBottomRight.X - 10 && Cursor.Position.Y < this.CurrentBottomRight.Y - 10)
-                {
-                    // Erase the previous rectangle
-                    this.g.DrawRectangle(this.EraserPen, this.GetX(this.CurrentTopLeft.X), this.CurrentTopLeft.Y, this.RectangleWidth, this.RectangleHeight);
-                    this.CurrentTopLeft.X = Cursor.Position.X;
-                    this.CurrentTopLeft.Y = Cursor.Position.Y;
-                    this.RectangleWidth = this.CurrentBottomRight.X - this.CurrentTopLeft.X;
-                    this.RectangleHeight = this.CurrentBottomRight.Y - this.CurrentTopLeft.Y;
-                    this.g.DrawRectangle(this.MyPen, this.GetX(this.CurrentTopLeft.X), this.CurrentTopLeft.Y, this.RectangleWidth, this.RectangleHeight);
-                }
-            }
+            this.Cursor = Cursors.Arrow;
 
-            if (this.CurrentAction == ClickAction.BottomLeftSizing)
-            {
-                if (Cursor.Position.X < this.CurrentBottomRight.X - 10 && Cursor.Position.Y > this.CurrentTopLeft.Y + 10)
-                {
-                    // Erase the previous rectangle
-                    this.g.DrawRectangle(this.EraserPen, this.GetX(this.CurrentTopLeft.X), this.CurrentTopLeft.Y, this.RectangleWidth, this.RectangleHeight);
-                    this.CurrentTopLeft.X = Cursor.Position.X;
-                    this.CurrentBottomRight.Y = Cursor.Position.Y;
-                    this.RectangleWidth = this.CurrentBottomRight.X - this.CurrentTopLeft.X;
-                    this.RectangleHeight = this.CurrentBottomRight.Y - this.CurrentTopLeft.Y;
-                    this.g.DrawRectangle(this.MyPen, this.GetX(this.CurrentTopLeft.X), this.CurrentTopLeft.Y, this.RectangleWidth, this.RectangleHeight);
-                }
-            }
+            //Erase the previous rectangle
+            g.DrawRectangle(EraserPen, GetX(CurrentTopLeft.X), CurrentTopLeft.Y, GetX(CurrentBottomRight.X) - GetX(CurrentTopLeft.X), CurrentBottomRight.Y - CurrentTopLeft.Y);
 
-            if (this.CurrentAction == ClickAction.RightSizing)
+            //Calculate X Coordinates
+            if (Cursor.Position.X < ClickPoint.X)
             {
-                if (Cursor.Position.X > this.CurrentTopLeft.X + 10)
-                {
-                    // Erase the previous rectangle
-                    this.g.DrawRectangle(this.EraserPen, this.GetX(this.CurrentTopLeft.X), this.CurrentTopLeft.Y, this.RectangleWidth, this.RectangleHeight);
-                    this.CurrentBottomRight.X = Cursor.Position.X;
-                    this.RectangleWidth = this.CurrentBottomRight.X - this.CurrentTopLeft.X;
-                    this.g.DrawRectangle(this.MyPen, this.GetX(this.CurrentTopLeft.X), this.CurrentTopLeft.Y, this.RectangleWidth, this.RectangleHeight);
-                }
-            }
 
-            if (this.CurrentAction == ClickAction.TopRightSizing)
-            {
-                if (Cursor.Position.X > this.CurrentTopLeft.X + 10 && Cursor.Position.Y < this.CurrentBottomRight.Y - 10)
-                {
-                    // Erase the previous rectangle
-                    this.g.DrawRectangle(this.EraserPen, this.GetX(this.CurrentTopLeft.X), this.CurrentTopLeft.Y, this.RectangleWidth, this.RectangleHeight);
-                    this.CurrentBottomRight.X = Cursor.Position.X;
-                    this.CurrentTopLeft.Y = Cursor.Position.Y;
-                    this.RectangleWidth = this.CurrentBottomRight.X - this.CurrentTopLeft.X;
-                    this.RectangleHeight = this.CurrentBottomRight.Y - this.CurrentTopLeft.Y;
-                    this.g.DrawRectangle(this.MyPen, this.GetX(this.CurrentTopLeft.X), this.CurrentTopLeft.Y, this.RectangleWidth, this.RectangleHeight);
-                }
-            }
+                CurrentTopLeft.X = Cursor.Position.X;
+                CurrentBottomRight.X = ClickPoint.X;
 
-            if (this.CurrentAction == ClickAction.BottomRightSizing)
-            {
-                if (Cursor.Position.X > this.CurrentTopLeft.X + 10 && Cursor.Position.Y > this.CurrentTopLeft.Y + 10)
-                {
-                    // Erase the previous rectangle
-                    this.g.DrawRectangle(this.EraserPen, this.GetX(this.CurrentTopLeft.X), this.CurrentTopLeft.Y, this.RectangleWidth, this.RectangleHeight);
-                    this.CurrentBottomRight.X = Cursor.Position.X;
-                    this.CurrentBottomRight.Y = Cursor.Position.Y;
-                    this.RectangleWidth = this.CurrentBottomRight.X - this.CurrentTopLeft.X;
-                    this.RectangleHeight = this.CurrentBottomRight.Y - this.CurrentTopLeft.Y;
-                    this.g.DrawRectangle(this.MyPen, this.GetX(this.CurrentTopLeft.X), this.CurrentTopLeft.Y, this.RectangleWidth, this.RectangleHeight);
-                }
-            }
-
-            if (this.CurrentAction == ClickAction.TopSizing)
-            {
-                if (Cursor.Position.Y < this.CurrentBottomRight.Y - 10)
-                {
-                    // Erase the previous rectangle
-                    this.g.DrawRectangle(this.EraserPen, this.GetX(this.CurrentTopLeft.X), this.CurrentTopLeft.Y, this.RectangleWidth, this.RectangleHeight);
-                    this.CurrentTopLeft.Y = Cursor.Position.Y;
-                    this.RectangleHeight = this.CurrentBottomRight.Y - this.CurrentTopLeft.Y;
-                    this.g.DrawRectangle(this.MyPen, this.GetX(this.CurrentTopLeft.X), this.CurrentTopLeft.Y, this.RectangleWidth, this.RectangleHeight);
-                }
-            }
-
-            if (this.CurrentAction == ClickAction.BottomSizing)
-            {
-                if (Cursor.Position.Y > this.CurrentTopLeft.Y + 10)
-                {
-                    // Erase the previous rectangle
-                    this.g.DrawRectangle(this.EraserPen, this.GetX(this.CurrentTopLeft.X), this.CurrentTopLeft.Y, this.RectangleWidth, this.RectangleHeight);
-                    this.CurrentBottomRight.Y = Cursor.Position.Y;
-                    this.RectangleHeight = this.CurrentBottomRight.Y - this.CurrentTopLeft.Y;
-                    this.g.DrawRectangle(this.MyPen, this.GetX(this.CurrentTopLeft.X), this.CurrentTopLeft.Y, this.RectangleWidth, this.RectangleHeight);
-                }
-            }
-        }
-
-        private void SaveSelection()
-        {
-            if (this.CurrentBottomRight.X - this.CurrentTopLeft.X < 60 || this.CurrentBottomRight.Y - this.CurrentTopLeft.Y < 60)
-            {
-                MessageBox.Show(Translate.GetTranslate("frmSettings", "AREA_SMALL"), "Error");
             }
             else
             {
-                Settings.Default.minScanXY = this.CurrentTopLeft;
-                Settings.Default.maxScanXY = this.CurrentBottomRight;
-                this.settings.txtMinXY.Text = this.CurrentTopLeft.ToString();
-                this.settings.txtMaxXY.Text = this.CurrentBottomRight.ToString();
+
+                CurrentTopLeft.X = ClickPoint.X;
+                CurrentBottomRight.X = Cursor.Position.X;
+
             }
 
-            this.Close();
-        }
-
-        private void SetClickAction()
-        {
-            switch (this.CursorPosition())
+            //Calculate Y Coordinates
+            if (Cursor.Position.Y < ClickPoint.Y)
             {
-                case CursPos.BottomLine:
-                    this.CurrentAction = ClickAction.BottomSizing;
-                    break;
-                case CursPos.TopLine:
-                    this.CurrentAction = ClickAction.TopSizing;
-                    break;
-                case CursPos.LeftLine:
-                    this.CurrentAction = ClickAction.LeftSizing;
-                    break;
-                case CursPos.TopLeft:
-                    this.CurrentAction = ClickAction.TopLeftSizing;
-                    break;
-                case CursPos.BottomLeft:
-                    this.CurrentAction = ClickAction.BottomLeftSizing;
-                    break;
-                case CursPos.RightLine:
-                    this.CurrentAction = ClickAction.RightSizing;
-                    break;
-                case CursPos.TopRight:
-                    this.CurrentAction = ClickAction.TopRightSizing;
-                    break;
-                case CursPos.BottomRight:
-                    this.CurrentAction = ClickAction.BottomRightSizing;
-                    break;
-                case CursPos.WithinSelectionArea:
-                    this.CurrentAction = ClickAction.Dragging;
-                    break;
-                case CursPos.OutsideSelectionArea:
-                    this.CurrentAction = ClickAction.Outside;
-                    break;
+
+                CurrentTopLeft.Y = Cursor.Position.Y;
+                CurrentBottomRight.Y = ClickPoint.Y;
+
             }
+            else
+            {
+
+                CurrentTopLeft.Y = ClickPoint.Y;
+                CurrentBottomRight.Y = Cursor.Position.Y;
+
+            }
+
+            //Draw a new rectangle
+            g.DrawRectangle(MyPen, GetX(CurrentTopLeft.X), CurrentTopLeft.Y, GetX(CurrentBottomRight.X) - GetX(CurrentTopLeft.X), CurrentBottomRight.Y - CurrentTopLeft.Y);
+
         }
+
     }
 }

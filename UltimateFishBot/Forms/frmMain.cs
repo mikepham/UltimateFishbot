@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.Net;
 using System.Threading.Tasks;
@@ -10,7 +10,6 @@ namespace UltimateFishBot.Forms
 {
     public partial class frmMain : Form, IManagerEventHandler
     {
-        private static readonly int WM_HOTKEY = 0x0312;
 
         [Flags]
         private enum KeyModifier
@@ -27,7 +26,7 @@ namespace UltimateFishBot.Forms
             CursorCapture = 1
         }
 
-        public enum KeyModifier
+        public frmMain()
         {
             ReloadHotkeys();
             InitializeComponent();
@@ -40,31 +39,32 @@ namespace UltimateFishBot.Forms
 
         private async void frmMain_Load(object sender, EventArgs e)
         {
-            btnStart.Text      = Translate.GetTranslate("frmMain", "BUTTON_START");
-            btnStop.Text       = Translate.GetTranslate("frmMain", "BUTTON_STOP");
-            btnSettings.Text   = Translate.GetTranslate("frmMain", "BUTTON_SETTINGS");
+            btnStart.Text = Translate.GetTranslate("frmMain", "BUTTON_START");
+            btnStop.Text = Translate.GetTranslate("frmMain", "BUTTON_STOP");
+            btnSettings.Text = Translate.GetTranslate("frmMain", "BUTTON_SETTINGS");
             btnStatistics.Text = Translate.GetTranslate("frmMain", "BUTTON_STATISTICS");
-            btnHowTo.Text      = Translate.GetTranslate("frmMain", "BUTTON_HTU");
-            btnClose.Text      = Translate.GetTranslate("frmMain", "BUTTON_EXIT");
-            btnAbout.Text      = Translate.GetTranslate("frmMain", "BUTTON_ABOUT");
-            lblStatus.Text     = Translate.GetTranslate("frmMain", "LABEL_STOPPED");
+            btnHowTo.Text = Translate.GetTranslate("frmMain", "BUTTON_HTU");
+            btnClose.Text = Translate.GetTranslate("frmMain", "BUTTON_EXIT");
+            btnAbout.Text = Translate.GetTranslate("frmMain", "BUTTON_ABOUT");
+            lblStatus.Text = Translate.GetTranslate("frmMain", "LABEL_STOPPED");
             //this.Text          = "UltimateFishBot - v " + System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString();
             /* Hide ? */
-            
+
             ReloadHotkeys();
             await CheckStatus();
         }
 
         private async Task CheckStatus()
         {
-            this.UnregisterHotKeys();
+            lblWarn.Text = Translate.GetTranslate("frmMain", "LABEL_CHECKING_STATUS");
+            lblWarn.Parent = PictureBox1;
 
-            foreach (var hotKey in (HotKey[])Enum.GetValues(typeof(HotKey)))
+            try
             {
                 string result = await (new WebClient().DownloadStringTaskAsync("http://www.robpaulson.com/fishbot/status.txt"));
                 if (result.ToLower().Trim() != "safe")
                 {
-                    lblWarn.Text      = Translate.GetTranslate("frmMain", "LABEL_NO_LONGER_SAFE");
+                    lblWarn.Text = Translate.GetTranslate("frmMain", "LABEL_NO_LONGER_SAFE");
                     lblWarn.ForeColor = Color.Red;
                     lblWarn.BackColor = Color.Black;
                 }
@@ -84,62 +84,70 @@ namespace UltimateFishBot.Forms
             await _manager.StartOrResumeOrPause();
         }
 
-        public void StopFishing()
+        private void btnStop_Click(object sender, EventArgs e)
         {
             _manager.Stop();
         }
 
-        protected override void WndProc(ref Message m)
+        private void btnSettings_Click(object sender, EventArgs e)
         {
             frmSettings.GetForm(this).Show();
         }
 
-        private void btnAbout_Click(object sender, EventArgs e)
+        private void btnStatistics_Click(object sender, EventArgs e)
         {
             frmStats.GetForm(_manager).Show();
         }
 
-        private void btnClose_Click(object sender, EventArgs e)
+        private void btnHowTo_Click(object sender, EventArgs e)
         {
             frmDirections.GetForm.Show();
         }
 
-        private void btnHowTo_Click(object sender, EventArgs e)
+        private void btnClose_Click(object sender, EventArgs e)
         {
             Close();
         }
 
-        private void btnStart_Click(object sender, EventArgs e)
+        protected override void WndProc(ref Message m)
         {
-            this.btnSettings.Enabled = false;
-            this.btnStop.Enabled = true;
+            base.WndProc(ref m);
 
-            if (m.Msg == WM_HOTKEY) {
+            if (m.Msg == WM_HOTKEY)
+            {
                 Keys key = (Keys)(((int)m.LParam >> 16) & 0xFFFF);                  // The key of the hotkey that was pressed.
                 KeyModifier modifier = (KeyModifier)((int)m.LParam & 0xFFFF);       // The modifier of the hotkey that was pressed.
                 int id = m.WParam.ToInt32();                                        // The id of the hotkey that was pressed.
 
-                if (id == (int)HotKey.StartStop) {
+                if (id == (int)HotKey.StartStop)
+                {
                     Task.Factory.StartNew(async () => {
-                        try {
+                        try
+                        {
                             await _manager.StartOrStop();
-                        } catch (TaskCanceledException) {
+                        }
+                        catch (TaskCanceledException)
+                        {
                             // Do nothing, cancellations are to be expected
                         }
                     },
                     System.Threading.CancellationToken.None,
                     TaskCreationOptions.None,
                     TaskScheduler.FromCurrentSynchronizationContext());
-                } else if (id == (int)HotKey.CursorCapture) {
+                }
+                else if (id == (int)HotKey.CursorCapture)
+                {
                     _manager.CaptureCursor();
                 }
             }
         }
 
-        public void ReloadHotkeys() {
+        public void ReloadHotkeys()
+        {
             UnregisterHotKeys();
 
-            foreach (HotKey hotKey in (HotKey[])Enum.GetValues(typeof(HotKey))) {
+            foreach (HotKey hotKey in (HotKey[])Enum.GetValues(typeof(HotKey)))
+            {
                 Keys key = Keys.None;
                 try
                 {
@@ -153,20 +161,23 @@ namespace UltimateFishBot.Forms
                     KeyModifier modifiers = RemoveAndReturnModifiers(ref key);
                     Win32.RegisterHotKey(Handle, (int)hotKey, (int)modifiers, (int)key);
 
-                } catch(Exception)
+                }
+                catch (Exception)
                 {
                     Console.WriteLine($@"Unable to load Hotkey: {key}");
                 }
             }
         }
 
-        public void UnregisterHotKeys() {
+        public void UnregisterHotKeys()
+        {
             // Unregister all hotkeys before closing the form.
             foreach (HotKey hotKey in (HotKey[])Enum.GetValues(typeof(HotKey)))
                 Win32.UnregisterHotKey(Handle, (int)hotKey);
         }
 
-        private KeyModifier RemoveAndReturnModifiers(ref Keys key) {
+        private KeyModifier RemoveAndReturnModifiers(ref Keys key)
+        {
             var modifiers = KeyModifier.None;
 
             modifiers |= RemoveAndReturnModifier(ref key, Keys.Shift, KeyModifier.Shift);
@@ -187,60 +198,58 @@ namespace UltimateFishBot.Forms
             return KeyModifier.None;
         }
 
-        private KeyModifier RemoveAndReturnModifiers(ref Keys key)
+        private void frmMain_FormClosing(object sender, FormClosingEventArgs e)
         {
-            var modifiers = KeyModifier.None;
+            UnregisterHotKeys();
+        }
 
         private readonly Manager _manager;
         private static int WM_HOTKEY = 0x0312;
 
-            return modifiers;
-        }
 
-        private void UnregisterHotKeys()
+        private void btnAbout_Click(object sender, EventArgs e)
         {
-            // Unregister all hotkeys before closing the form.
-            foreach (var hotKey in (HotKey[])Enum.GetValues(typeof(HotKey))) Win32.UnregisterHotKey(this.Handle, (int)hotKey);
+            about.GetForm.Show();
         }
 
         private void ToggleButtonEnabledRunning()
         {
             btnSettings.Enabled = false;
-            btnStop.Enabled     = true;
+            btnStop.Enabled = true;
         }
 
         private void ToggleButtonEnabledNotRunning()
         {
             btnSettings.Enabled = true;
-            btnStop.Enabled     = false;
+            btnStop.Enabled = false;
         }
 
         public void Started()
         {
             ToggleButtonEnabledRunning();
-            btnStart.Text   = Translate.GetTranslate("frmMain", "BUTTON_PAUSE");
+            btnStart.Text = Translate.GetTranslate("frmMain", "BUTTON_PAUSE");
             lblStatus.Image = Resources.online;
         }
 
         public void Stopped()
         {
             ToggleButtonEnabledNotRunning();
-            btnStart.Text   = Translate.GetTranslate("frmMain", "BUTTON_START");
+            btnStart.Text = Translate.GetTranslate("frmMain", "BUTTON_START");
             lblStatus.Image = Resources.offline;
         }
 
         public void Resumed()
         {
             ToggleButtonEnabledRunning();
-            btnStart.Text   = Translate.GetTranslate("frmMain", "BUTTON_PAUSE");
+            btnStart.Text = Translate.GetTranslate("frmMain", "BUTTON_PAUSE");
             lblStatus.Image = Resources.online;
         }
 
         public void Paused()
         {
             btnSettings.Enabled = true;
-            btnStart.Text       = Translate.GetTranslate("frmMain", "BUTTON_RESUME");
-            lblStatus.Image     = Resources.online;
+            btnStart.Text = Translate.GetTranslate("frmMain", "BUTTON_RESUME");
+            lblStatus.Image = Resources.online;
         }
     }
 }

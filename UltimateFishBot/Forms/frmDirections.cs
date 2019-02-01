@@ -1,12 +1,10 @@
-﻿using System;
+using System;
 using System.Windows.Forms;
 
 namespace UltimateFishBot.Forms
 {
     using System;
     using System.Windows.Forms;
-
-    using UltimateFishBot.Classes;
 
     public partial class frmDirections : Form
     {
