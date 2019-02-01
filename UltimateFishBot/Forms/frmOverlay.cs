@@ -1,3 +1,7 @@
+using System;
+using System.Drawing;
+using System.Windows.Forms;
+
 namespace UltimateFishBot.Forms
 {
     using System;
@@ -29,7 +33,9 @@ namespace UltimateFishBot.Forms
 
         public bool RectangleDrawn;
 
-        public int RectangleHeight;
+        private Graphics g;
+        private Pen MyPen = new Pen(Color.White, 1);
+        private Pen EraserPen = new Pen(Color.FromArgb(0, 0, 0), 20);
 
         public int RectangleWidth;
 
@@ -97,9 +103,14 @@ namespace UltimateFishBot.Forms
 
             RightLine, 
 
-            TopLeft, 
+            }
+            else
+            {
 
-            TopRight, 
+                Properties.Settings.Default.minScanXY = CurrentTopLeft;
+                Properties.Settings.Default.maxScanXY = CurrentBottomRight;
+                settings.txtMinXY.Text = CurrentTopLeft.ToString();
+                settings.txtMaxXY.Text = CurrentBottomRight.ToString();
 
             BottomLeft, 
 
@@ -378,42 +389,22 @@ namespace UltimateFishBot.Forms
                 this.EraserPen = new Pen(Color.Yellow, 20);
             }
             else
+                //Selection area has reached the right side of the screen
+                if (GetX(Cursor.Position.X) - DragClickRelative.X > 0)
             {
-                this.BackColor = Color.Black;
-                this.MyPen.Dispose();
-                this.EraserPen.Dispose();
-                this.MyPen = new Pen(Color.White, 1);
-                this.EraserPen = new Pen(Color.Black, 20);
+
+                CurrentTopLeft.X = this.Width/*System.Windows.Forms.Screen.PrimaryScreen.Bounds.Width*/ - RectangleWidth;
+                CurrentBottomRight.X = CurrentTopLeft.X + RectangleWidth;
+
             }
-
-            Application.DoEvents();
-
-            // Draw a new rectangle
-            this.g.DrawRectangle(
-                this.MyPen, 
-                this.GetX(this.CurrentTopLeft.X), 
-                this.CurrentTopLeft.Y, 
-                this.GetX(this.CurrentBottomRight.X) - this.GetX(this.CurrentTopLeft.X), 
-                this.CurrentBottomRight.Y - this.CurrentTopLeft.Y);
-        }
-
-        private void mouse_Click(object sender, MouseEventArgs e)
-        {
-            if (e.Button == MouseButtons.Left)
+            //Selection area has reached the left side of the screen
+            else
             {
-                this.SetClickAction();
-                this.LeftButtonDown = true;
-                this.ClickPoint = new Point(MousePosition.X, MousePosition.Y);
 
-                if (this.RectangleDrawn)
-                {
-                    this.RectangleHeight = this.CurrentBottomRight.Y - this.CurrentTopLeft.Y;
-                    this.RectangleWidth = this.CurrentBottomRight.X - this.CurrentTopLeft.X;
-                    this.DragClickRelative.X = Cursor.Position.X - this.CurrentTopLeft.X;
-                    this.DragClickRelative.Y = Cursor.Position.Y - this.CurrentTopLeft.Y;
-                }
+                CurrentTopLeft.X = this.Left;
+                CurrentBottomRight.X = CurrentTopLeft.X + RectangleWidth;
+
             }
-        }
 
         private void mouse_dClick(object sender, EventArgs e)
         {
@@ -426,15 +417,23 @@ namespace UltimateFishBot.Forms
             {
                 this.DrawSelection();
             }
-
-            if (this.RectangleDrawn)
+            else
+                //Selection area has reached the bottom of the screen
+                if (Cursor.Position.Y - DragClickRelative.Y > 0)
             {
-                this.CursorPosition();
 
-                if (this.CurrentAction == ClickAction.Dragging)
-                {
-                    this.DragSelection();
-                }
+                CurrentTopLeft.Y = this.Height/*System.Windows.Forms.Screen.PrimaryScreen.Bounds.Height*/ - RectangleHeight;
+                CurrentBottomRight.Y = CurrentTopLeft.Y + RectangleHeight;
+
+            }
+            //Selection area has reached the top of the screen
+            else
+            {
+
+                CurrentTopLeft.Y = 0;
+                CurrentBottomRight.Y = CurrentTopLeft.Y + RectangleHeight;
+
+            }
 
                 if (this.CurrentAction != ClickAction.Dragging && this.CurrentAction != ClickAction.Outside)
                 {
@@ -442,6 +441,7 @@ namespace UltimateFishBot.Forms
                 }
             }
         }
+        #endregion
 
         private void mouse_Up(object sender, MouseEventArgs e)
         {

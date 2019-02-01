@@ -1,4 +1,7 @@
-﻿namespace UltimateFishBot.Forms
+﻿using System;
+using System.Windows.Forms;
+
+namespace UltimateFishBot.Forms
 {
     using System;
     using System.Windows.Forms;
@@ -32,14 +35,14 @@
         {
             this.Text = Translate.GetTranslate("frmDirections", "TITLE");
 
-            this.Label1Title.Text = Translate.GetTranslate("frmDirections", "LABEL_SETTING_WOW_TITLE");
-            this.Label1Desc.Text = Translate.GetTranslate("frmDirections", "LABEL_SETTING_WOW_DESC");
+            Label1Title.Text = Translate.GetTranslate("frmDirections", "LABEL_SETTING_WOW_TITLE");
+            Label1Desc.Text = Translate.GetTranslate("frmDirections", "LABEL_SETTING_WOW_DESC");
 
-            this.Label2Title.Text = Translate.GetTranslate("frmDirections", "LABEL_FIND_LOCATION_TITLE");
-            this.Label2Desc.Text = Translate.GetTranslate("frmDirections", "LABEL_FIND_LOCATION_DESC");
+            Label2Title.Text = Translate.GetTranslate("frmDirections", "LABEL_FIND_LOCATION_TITLE");
+            Label2Desc.Text = Translate.GetTranslate("frmDirections", "LABEL_FIND_LOCATION_DESC");
 
-            this.Label3Title.Text = Translate.GetTranslate("frmDirections", "LABEL_FISH_TITLE");
-            this.Label3Desc.Text = Translate.GetTranslate("frmDirections", "LABEL_FISH_DESC");
+            Label3Title.Text = Translate.GetTranslate("frmDirections", "LABEL_FISH_TITLE");
+            Label3Desc.Text = Translate.GetTranslate("frmDirections", "LABEL_FISH_DESC");
         }
     }
 }

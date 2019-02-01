@@ -1,259 +1,268 @@
-﻿namespace UltimateFishBot.Classes.BodyParts
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using AForge.Imaging;
+using AForge.Imaging.Filters;
+using Serilog;
+using UltimateFishBot.Extensions;
+using UltimateFishBot.Fishing;
+using UltimateFishBot.Helpers;
+
+namespace UltimateFishBot.BodyParts
 {
-    using System;
-    using System.ComponentModel;
-    using System.Drawing;
-    using System.Threading;
-
-    using UltimateFishBot.Classes.Helpers;
-    using UltimateFishBot.Properties;
-
     internal class Eyes
     {
-        private readonly BackgroundWorker m_backgroundWorker;
+        private Win32.CursorInfo _noFishCursor;
+        private IntPtr _wow;
+        private Bitmap _capturedCursorIcon;
+        private Bitmap _background;
+        private Rectangle _wowRectangle;
 
-        private readonly Manager m_manager;
+        private int _aScanningSteps;
+        private int _aScanningDelay;
 
-        private Win32.CursorInfo m_noFishCursor;
-
-        private Rectangle wowRectangle;
-
-        private int xPosMax;
-
-        private int xPosMin;
-
-        private int yPosMax;
-
-        private int yPosMin;
-
-        public Eyes(Manager manager)
-        {
-            this.m_manager = manager;
-
-            this.m_backgroundWorker = new BackgroundWorker();
-            this.m_backgroundWorker.WorkerSupportsCancellation = true;
-            this.m_backgroundWorker.DoWork += this.EyeProcess_DoWork;
-            this.m_backgroundWorker.RunWorkerCompleted += this.EyeProcess_RunWorkerCompleted;
+        public Eyes(IntPtr wowWindow)  {
+            SetWow(wowWindow);
         }
 
-        public void StartLooking()
-        {
-            if (this.m_backgroundWorker.IsBusy) return;
-
-            this.m_manager.SetActualState(Manager.FishingState.SearchingForBobber);
-            this.m_backgroundWorker.RunWorkerAsync();
-        }
-
-        private void EyeProcess_DoWork(object sender, DoWorkEventArgs e)
-        {
-            this.m_noFishCursor = Win32.GetNoFishCursor();
-            this.wowRectangle = Win32.GetWowRectangle();
-
-            if (!Settings.Default.customScanArea)
-            {
-                this.xPosMin = this.wowRectangle.Width / 4;
-                this.xPosMax = this.xPosMin * 3;
-                this.yPosMin = this.wowRectangle.Height / 4;
-                this.yPosMax = this.yPosMin * 3;
-                Console.Out.WriteLine("Using default area");
-            }
-            else
-            {
-                this.xPosMin = Settings.Default.minScanXY.X;
-                this.yPosMin = Settings.Default.minScanXY.Y;
-                this.xPosMax = Settings.Default.maxScanXY.X;
-                this.yPosMax = Settings.Default.maxScanXY.Y;
-                Console.Out.WriteLine("Using custom area");
+        public void SetWow(IntPtr wowWindow) {
+            _wow = wowWindow;
+            _noFishCursor = Win32.GetNoFishCursor(_wow);
+            _wowRectangle = Win32.GetWowRectangle(_wow);
+            if (System.IO.File.Exists("capturedcursor.bmp")) {
+                _capturedCursorIcon = new Bitmap("capturedcursor.bmp", true);
             }
 
-            Console.Out.WriteLine("Scanning area: " + this.xPosMin + " , " + this.yPosMin + " , " + this.xPosMax + " , " + this.yPosMax + " , ");
-            if (Settings.Default.AlternativeRoute) this.LookForBobber_Spiral();
-            else this.LookForBobber();
         }
 
-        private void EyeProcess_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
+        // capture in grayscale
+        public void UpdateBackground() {
+            _background = new Grayscale(0.3725, 0.6154, 0.0121).Apply(Win32.CaptureWindow(_wow));
+            _background = new Pixellate().Apply(_background);
+        }
+
+        public async Task<BobbyLocation> LookForBobber(BotSession session, CancellationToken cancellationToken)
         {
-            if (e.Error != null)
-            {
-                // If not found, exception is sent...
-                this.m_manager.SetActualState(Manager.FishingState.Idle);
-                return;
+            Win32.Rect scanArea;
+            if (!Properties.Settings.Default.customScanArea) {
+                scanArea.Left = _wowRectangle.X + _wowRectangle.Width / 5;
+                scanArea.Right = _wowRectangle.X + _wowRectangle.Width / 5 * 4;
+                scanArea.Top = _wowRectangle.Y + _wowRectangle.Height / 4;
+                scanArea.Bottom = _wowRectangle.Y + _wowRectangle.Height / 4 * 3;
+                //Log.Information("Using default area");
+            } else {
+                scanArea.Left = Properties.Settings.Default.minScanXY.X;
+                scanArea.Top = Properties.Settings.Default.minScanXY.Y;
+                scanArea.Right = Properties.Settings.Default.maxScanXY.X;
+                scanArea.Bottom = Properties.Settings.Default.maxScanXY.Y;
+                //Log.Information("Using custom area");
+            }
+            Log.Information($"Scanning area: {scanArea.Left} , {scanArea.Top} , {scanArea.Right} , {scanArea.Bottom} cs: {session.BobbyLocations.Count()}");
+            
+            foreach (var dp in PointOfScreenDifferences()) {
+                if (await MoveMouseAndCheckCursor(dp.X, dp.X, cancellationToken,2)) {
+                    Log.Information("Bobber imagescan hit. ({bx},{by})", dp.X, dp.X);
+                    return dp;
+                }
+            }
+            
+            // utilize previous hits
+            foreach (var location in session.BobbyLocations) {
+                // do something with item.Key and item.Value
+                if (await MoveMouseAndCheckCursor(location.X, location.Y, cancellationToken,2))
+                {
+                    location.Hits++;
+                    Log.Information("Bobber position cache hit. ({bx},{by})", location.X, location.Y);
+                    return location;
+                }
+            }
+            
+            var rnd = new Random();
+            BobbyLocation loc;
+            _aScanningSteps = rnd.Next(Properties.Settings.Default.ScanningStepsLow, Properties.Settings.Default.ScanningStepsHigh);
+            if (Properties.Settings.Default.AlternativeRoute) {
+                loc = await LookForBobberSpiralImpl(session, scanArea, _aScanningSteps, Properties.Settings.Default.ScanningRetries, cancellationToken);
+            } else {
+                loc = await LookForBobberImpl(session, scanArea, _aScanningSteps, Properties.Settings.Default.ScanningRetries, cancellationToken);
             }
 
-            // ... if no exception, we found a fish !
-            this.m_manager.SetActualState(Manager.FishingState.WaitingForFish);
+            Log.Information("Bobber scan finished. ({bx},{by})", loc?.X, loc?.Y);
+            return loc;
+
         }
 
-        private bool ImageCompare(Bitmap firstImage, Bitmap secondImage)
+        private IEnumerable<BobbyLocation> PointOfScreenDifferences()
         {
-            if (firstImage.Width != secondImage.Width || firstImage.Height != secondImage.Height) return false;
+            var castbmp = Win32.CaptureWindow(_wow);
+            var processingFilter = new FiltersSequence
+            {
+                new Grayscale(0.3725, 0.6154, 0.0121),
+                new Pixellate(),
+                new Difference(_background),
+                new Threshold(15),
+                new Erosion()
+            };
 
-            for (var i = 0; i < firstImage.Width; i++) for (var j = 0; j < firstImage.Height; j++) if (firstImage.GetPixel(i, j).ToString() != secondImage.GetPixel(i, j).ToString()) return false;
+            var blobCounter = new BlobCounter();
+            blobCounter.ProcessImage(processingFilter.Apply(castbmp));
 
+            var brl = blobCounter.GetObjectsRectangles();
+            Log.Information("Bobber imagescan brl: {brl}", brl.Length);
+            var sdl = new List<BobbyLocation>();
+            foreach (var br in brl) {
+                var pt = new Win32.Point { x = (br.Left + br.Left + br.Right) * 4 / 12, y = (br.Top+br.Bottom+br.Bottom)*4/12 };
+                Win32.ClientToScreen(_wow, ref pt);
+                if (br.Right - br.Left>9&& br.Bottom - br.Top>9) { 
+//                    Win32.Point pt = new Win32.Point { x= wowRectangle.X+(br.Left + br.Right) / 2, y= wowRectangle.Y+(br.Top+br.Bottom)/2 };
+                    Log.Information("Bobber imagescan br: {bx},{by} - {w},{h}", pt.x,pt.y, br.Right-br.Left,br.Bottom-br.Top);
+                    sdl.Add(new BobbyLocation(pt));
+//                } else {
+//                    Log.Information("Bobber imagescan ignore br: {bx},{by} - {w},{h}", pt.x,pt.y, (br.Right-br.Left),(br.Bottom-br.Top));
+                }
+            }
+            // debug
+            /*
+            BitmapExt bmpDst = new BitmapExt(castbmp);
+            using (var g = Graphics.FromImage(bmpDst)) {
+                foreach (var br in brl) {
+                    if ((br.Right - br.Left) > 11 && (br.Bottom - br.Top) > 11) {
+                        g.DrawRectangle(Pens.White, br);
+                    }
+                }
+            }
+            bmpDst.Save("sc_"+DateTime.UtcNow.Ticks+".png", ImageFormat.Png);
+            */
+
+            return sdl;
+        }
+
+        public async Task<bool> SetMouseToBobber(BotSession session, BobbyLocation bobberPos, CancellationToken cancellationToken)  {// move mouse to previous recorded position and check shape
+            if (!await MoveMouseAndCheckCursor(bobberPos.X, bobberPos.Y, cancellationToken, 1)) {
+                Log.Information("Bobber lost. ({bx},{by})", bobberPos.X, bobberPos.Y);
+                const int fixr = 24;
+                Win32.Rect scanArea;
+                scanArea.Left = bobberPos.X - fixr;
+                scanArea.Right = bobberPos.X + fixr;
+                scanArea.Top = bobberPos.Y - fixr;
+                scanArea.Bottom = bobberPos.Y + fixr;
+                // initiate a small-area search for bobber
+                var loc = await LookForBobberSpiralImpl(session, scanArea, 4, 1, cancellationToken);
+                if (loc != null) {
+                    // search was successful
+                    Log.Information("Bobber found. ({bx},{by})", loc.X, loc.Y);
+                    return true;
+                }
+
+                Log.Information("Bobber lost. ({bx},{by})", 0, 0);
+                return false;
+            }
             return true;
         }
 
-        private void LookForBobber()
-        {
-            var XPOSSTEP = (this.xPosMax - this.xPosMin) / Settings.Default.ScanningSteps;
-            var YPOSSTEP = (this.yPosMax - this.yPosMin) / Settings.Default.ScanningSteps;
-            var XOFFSET = XPOSSTEP / Settings.Default.ScanningRetries;
 
-            if (Settings.Default.customScanArea)
-            {
-                for (var tryCount = 0; tryCount < Settings.Default.ScanningRetries; ++tryCount)
-                {
-                    for (var x = this.xPosMin + XOFFSET * tryCount; x < this.xPosMax; x += XPOSSTEP)
-                    {
-                        for (var y = this.yPosMin; y < this.yPosMax; y += YPOSSTEP)
+        private async Task<BobbyLocation> LookForBobberImpl(BotSession session, Win32.Rect scanArea, int steps, int retries, CancellationToken cancellationToken) {
+
+            var xposstep = (scanArea.Right - scanArea.Left) / steps;
+            var yposstep = (scanArea.Bottom - scanArea.Top) / steps;
+            var xoffset = xposstep / retries;
+
+            for (var tryCount = 0; tryCount < retries; ++tryCount) {
+                for (var x = scanArea.Left + xoffset * tryCount; x < scanArea.Right; x += xposstep) {
+                    for (var y = scanArea.Top; y < scanArea.Bottom; y += yposstep) {
+                        if (await MoveMouseAndCheckCursor(x, y, cancellationToken,1))
                         {
-                            if (this.MoveMouseAndCheckCursor(x, y)) return;
+                            return session.BobbyLocations.Add(x, y);
                         }
                     }
                 }
             }
-            else
-            {
-                for (var tryCount = 0; tryCount < Settings.Default.ScanningRetries; ++tryCount)
-                {
-                    for (var x = this.xPosMin + XOFFSET * tryCount; x < this.xPosMax; x += XPOSSTEP)
-                    {
-                        for (var y = this.yPosMin; y < this.yPosMax; y += YPOSSTEP)
-                        {
-                            if (this.MoveMouseAndCheckCursor(this.wowRectangle.X + x, this.wowRectangle.Y + y)) return;
-                        }
-                    }
-                }
-            }
-
-            throw new Exception("Fish not found"); // Will be catch in Manager:EyeProcess_RunWorkerCompleted
+            return null;
         }
 
-        private void LookForBobber_Spiral()
-        {
-            var XPOSSTEP = (this.xPosMax - this.xPosMin) / Settings.Default.ScanningSteps;
-            var YPOSSTEP = (this.yPosMax - this.yPosMin) / Settings.Default.ScanningSteps;
-            var XOFFSET = XPOSSTEP / Settings.Default.ScanningRetries;
-            var YOFFSET = YPOSSTEP / Settings.Default.ScanningRetries;
+        private async Task<BobbyLocation> LookForBobberSpiralImpl(BotSession session, Win32.Rect scanArea, int steps, int retries, CancellationToken cancellationToken) {
 
-            if (Settings.Default.customScanArea)
-            {
-                for (var tryCount = 0; tryCount < Settings.Default.ScanningRetries; ++tryCount)
-                {
-                    var x = (this.xPosMin + this.xPosMax) / 2 + XOFFSET * tryCount;
-                    var y = (this.yPosMin + this.yPosMax) / 2 + YOFFSET * tryCount;
+            var xposstep = (scanArea.Right - scanArea.Left) / steps;
+            var yposstep = (scanArea.Bottom - scanArea.Top) / steps;
+            var xoffset = xposstep / retries;
+            var yoffset = yposstep / retries;
 
-                    for (var i = 0; i <= 2 * Settings.Default.ScanningSteps; i++)
-                    {
-                        for (var j = 0; j <= i / 2; j++)
-                        {
-                            int dx = 0, dy = 0;
+            for (var tryCount = 0; tryCount < retries; ++tryCount) {
+                var x = (scanArea.Left + scanArea.Right) / 2 + xoffset * tryCount;
+                var y = (scanArea.Top + scanArea.Bottom) / 2 + yoffset * tryCount;
 
-                            if (i % 2 == 0)
-                            {
-                                if (i / 2 % 2 == 0)
-                                {
-                                    dx = XPOSSTEP;
-                                    dy = 0;
-                                }
-                                else
-                                {
-                                    dx = -XPOSSTEP;
-                                    dy = 0;
-                                }
+                for (var i = 0; i <= 2 * steps; i++) {
+                    for (var j = 0; j <= i / 2; j++) {
+                        int dx, dy;
+                        if (i % 2 == 0) {
+                            if (i / 2 % 2 == 0) {
+                                dx = xposstep;
+                                dy = 0;
+                            } else {
+                                dx = -xposstep;
+                                dy = 0;
                             }
-                            else
-                            {
-                                if (i / 2 % 2 == 0)
-                                {
-                                    dx = 0;
-                                    dy = YPOSSTEP;
-                                }
-                                else
-                                {
-                                    dx = 0;
-                                    dy = -YPOSSTEP;
-                                }
+                        } else {
+                            if (i / 2 % 2 == 0) {
+                                dx = 0;
+                                dy = yposstep;
+                            } else {
+                                dx = 0;
+                                dy = -yposstep;
                             }
-
-                            x += dx;
-                            y += dy;
-
-                            if (this.MoveMouseAndCheckCursor(x, y)) return;
                         }
-                    }
-                }
-            }
-            else
-            {
-                for (var tryCount = 0; tryCount < Settings.Default.ScanningRetries; ++tryCount)
-                {
-                    var x = (this.xPosMin + this.xPosMax) / 2 + XOFFSET * tryCount;
-                    var y = (this.yPosMin + this.yPosMax) / 2 + YOFFSET * tryCount;
-
-                    for (var i = 0; i <= 2 * Settings.Default.ScanningSteps; i++)
-                    {
-                        for (var j = 0; j <= i / 2; j++)
-                        {
-                            int dx = 0, dy = 0;
-
-                            if (i % 2 == 0)
-                            {
-                                if (i / 2 % 2 == 0)
-                                {
-                                    dx = XPOSSTEP;
-                                    dy = 0;
-                                }
-                                else
-                                {
-                                    dx = -XPOSSTEP;
-                                    dy = 0;
-                                }
-                            }
-                            else
-                            {
-                                if (i / 2 % 2 == 0)
-                                {
-                                    dx = 0;
-                                    dy = YPOSSTEP;
-                                }
-                                else
-                                {
-                                    dx = 0;
-                                    dy = -YPOSSTEP;
-                                }
-                            }
-
-                            x += dx;
-                            y += dy;
-
-                            if (this.MoveMouseAndCheckCursor(this.wowRectangle.X + x, this.wowRectangle.Y + y)) return;
+                        x += dx;
+                        y += dy;
+                        if (await MoveMouseAndCheckCursor(x, y, cancellationToken,1)) {
+                            return session.BobbyLocations.Add(x, y);
                         }
                     }
                 }
             }
 
-            throw new Exception("Fish not found"); // Will be catch in Manager:EyeProcess_RunWorkerCompleted
+            return null;
         }
 
-        private bool MoveMouseAndCheckCursor(int x, int y)
-        {
-            if (this.m_manager.IsStoppedOrPaused()) throw new Exception("Bot paused or stopped");
+        private async Task<bool> MoveMouseAndCheckCursor(int x, int y, CancellationToken cancellationToken,int mpy)   {
+            if (cancellationToken.IsCancellationRequested)
+                throw new TaskCanceledException();
 
             Win32.MoveMouse(x, y);
 
-            // Sleep (give the OS a chance to change the cursor)
-            Thread.Sleep(Settings.Default.ScanningDelay);
+            // Pause (give the OS a chance to change the cursor)
+            var rnd = new Random();
+            _aScanningDelay = rnd.Next(Properties.Settings.Default.ScanningDelayLow, Properties.Settings.Default.ScanningDelayHigh);
+            await Task.Delay(mpy*_aScanningDelay, cancellationToken);
 
             var actualCursor = Win32.GetCurrentCursor();
 
-            if (actualCursor.flags == this.m_noFishCursor.flags && actualCursor.hCursor == this.m_noFishCursor.hCursor) return false;
+            if (actualCursor.flags == _noFishCursor.flags &&
+                actualCursor.hCursor == _noFishCursor.hCursor)
+                return false;
 
             // Compare the actual icon with our fishIcon if user want it
-            if (Settings.Default.CheckCursor) if (!this.ImageCompare(Win32.GetCursorIcon(actualCursor), Resources.fishIcon35x35)) return false;
+            if (Properties.Settings.Default.CheckCursor) { 
+                if (Win32.GetCursorIcon(actualCursor).ImageCompare(Properties.Resources.fishIcon35x35)) { 
+                    // We found a fish!
+                    return true;
+                }
+                if (_capturedCursorIcon != null && Win32.GetCursorIcon(actualCursor).ImageCompare(_capturedCursorIcon)) {
+                    // We found a fish!
+                    return true;
+                }
+                return false;
+            }
 
-            // We found a fish !
             return true;
         }
+
+        public void CaptureCursor() {
+            var actualCursor = Win32.GetCurrentCursor();
+            var cursorIcon = Win32.GetCursorIcon(actualCursor);
+            cursorIcon.Save("capturedcursor.bmp");
+        }
+
     }
 }

@@ -1,4 +1,13 @@
-﻿namespace UltimateFishBot.Classes
+using System;
+using System.Diagnostics;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using Serilog;
+using UltimateFishBot.BodyParts;
+using UltimateFishBot.Helpers;
+
+namespace UltimateFishBot
 {
     using System;
     using System.Windows.Forms;
@@ -8,230 +17,375 @@
 
     public class Manager
     {
-        private const int ACTION_TIMER_LENGTH = 500;
-
-        private const int MINUTE = 60 * SECOND;
-
-        private const int SECOND = 1000;
-
-        private FishingState m_actualState;
-
-        private readonly Timer m_AntiAfkTimer;
-
-        private readonly Timer m_BaitTimer;
-
-        private readonly Timer m_CharmTimer;
-
-        private Ears m_ears;
-
-        private readonly Eyes m_eyes;
-
-        private FishingStats m_fishingStats;
-
-        private int m_fishWaitTime;
-
-        private readonly Hands m_hands;
-
-        private readonly Timer m_HearthStoneTimer;
-
-        private readonly Legs m_legs;
-
-        private readonly Timer m_LureTimer;
-
-        private readonly frmMain m_mainForm;
-
-        private readonly Mouth m_mouth;
-
-        private NeededAction m_neededActions;
-
-        private readonly Timer m_nextActionTimer;
-
-        private readonly Timer m_RaftTimer;
-
-        private T2S t2s;
-
-        public Manager(frmMain mainForm)
+        private enum FishingState
         {
-            this.m_mainForm = mainForm;
-
-            this.m_eyes = new Eyes(this);
-            this.m_hands = new Hands();
-            this.m_ears = new Ears(this);
-            this.m_mouth = new Mouth(this.m_mainForm);
-            this.m_legs = new Legs();
-
-            this.m_actualState = FishingState.Stopped;
-            this.m_neededActions = NeededAction.None;
-
-            this.m_fishingStats.Reset();
-
-            // InitializeTimer(Timer,                Handler);
-            this.InitializeTimer(ref this.m_nextActionTimer, this.TakeNextAction);
-            this.InitializeTimer(ref this.m_LureTimer, this.LureTimerTick);
-            this.InitializeTimer(ref this.m_CharmTimer, this.CharmTimerTick);
-            this.InitializeTimer(ref this.m_RaftTimer, this.RaftTimerTick);
-            this.InitializeTimer(ref this.m_BaitTimer, this.BaitTimerTick);
-            this.InitializeTimer(ref this.m_HearthStoneTimer, this.HearthStoneTimerTick);
-            this.InitializeTimer(ref this.m_AntiAfkTimer, this.AntiAfkTimerTick);
-
-            this.ResetTimers();
-        }
-
-        public enum FishingState
-        {
-            Idle = 0, 
-
-            Start = 1, 
-
-            Casting = 2, 
-
-            SearchingForBobber = 3, 
-
-            WaitingForFish = 4, 
-
-            Looting = 5, 
-
-            Paused = 6, 
-
+            Fishing = 3,
+            Paused  = 6,
             Stopped = 7
         }
 
-        public enum NeededAction
+        private CancellationTokenSource _cancellationTokenSource;
+        private readonly System.Windows.Forms.Timer _lureTimer;
+        private readonly System.Windows.Forms.Timer _hearthStoneTimer;
+        private readonly System.Windows.Forms.Timer _raftTimer;
+        private readonly System.Windows.Forms.Timer _charmTimer;
+        private readonly System.Windows.Forms.Timer _baitTimer;
+        private readonly System.Windows.Forms.Timer _antiAfkTimer;
+
+        private readonly IManagerEventHandler _mManagerEventHandler;
+
+        private readonly Eyes _eyes;
+        private readonly Hands _hands;
+        private readonly Ears _ears;
+        private readonly Mouth _mouth;
+        private readonly Legs _legs;
+        private T2S _t2S;
+
+        private NeededAction _neededActions;
+        private FishingState _fishingState;
+        private readonly FishingStats _fishingStats;
+        private int _fishErrorLength;
+
+        private const int Second = 1000;
+        private const int Minute = 60 * Second;
+
+        ///  average
+        private int _aFishWait;
+
+
+        public Manager(IManagerEventHandler managerEventHandler, IProgress<string> progressHandle)
         {
-            None = 0x00, 
+            _mManagerEventHandler    = managerEventHandler;
+            var wowWindowPointer = Win32.FindWowWindow();
+            while (wowWindowPointer == new IntPtr())
+            {
+                var result = MessageBox.Show(
+                    @"Could not find the the WoW process. Please make sure the game is running.",
+                    @"Error - WoW not open", MessageBoxButtons.RetryCancel, MessageBoxIcon.Error);
+                if (result == DialogResult.Cancel)
+                    Environment.Exit(1);
+                wowWindowPointer = Win32.FindWowWindow();
+            }
+            _eyes                   = new Eyes(wowWindowPointer);
+            _hands                  = new Hands(wowWindowPointer);
+            _ears                   = new Ears();
+            _mouth                  = new Mouth(progressHandle);
+            _legs                   = new Legs();
 
-            HearthStone = 0x01, 
+            _fishingState           = FishingState.Stopped;
+            _neededActions          = NeededAction.None;
 
-            Lure = 0x02, 
+            _fishingStats           = new FishingStats();
+            _fishingStats.Reset();
 
-            Charm = 0x04, 
+            _cancellationTokenSource = null;
 
-            Raft = 0x08, 
+            _lureTimer = InitializeTimer(LureTimerTick);
+            _charmTimer = InitializeTimer(CharmTimerTick);
+            _raftTimer = InitializeTimer(RaftTimerTick);
+            _baitTimer = InitializeTimer(BaitTimerTick);
+            _hearthStoneTimer = InitializeTimer(HearthStoneTimerTick);
+            _antiAfkTimer = InitializeTimer(AntiAfkTimerTick);
 
-            Bait = 0x10, 
-
-            AntiAfkMove = 0x20
-        }
-
-        public FishingState GetActualState()
-        {
-            return this.m_actualState;
-        }
-
-        public FishingStats GetFishingStats()
-        {
-            return this.m_fishingStats;
-        }
-
-        public int GetFishWaitTime()
-        {
-            return this.m_fishWaitTime;
-        }
-
-        public void HearFish()
-        {
-            if (this.GetActualState() != FishingState.WaitingForFish) return;
-
-            this.m_mouth.Say(Translate.GetTranslate("manager", "LABEL_HEAR_FISH"));
-
-            this.SetActualState(FishingState.Looting);
-            this.m_hands.Loot();
-            this.m_fishWaitTime = 0;
-            this.SetActualState(FishingState.Idle);
-        }
-
-        public bool IsStoppedOrPaused()
-        {
-            return this.GetActualState() == FishingState.Stopped || this.GetActualState() == FishingState.Paused;
-        }
-
-        public void Pause()
-        {
-            this.SetActualState(FishingState.Paused);
-        }
-
-        public void ResetFishingStats()
-        {
-            this.m_fishingStats.Reset();
-        }
-
-        public void ReStart()
-        {
             this.ResetTimers();
-            this.SwitchTimerState(true);
-
-            if (Settings.Default.AutoLure) this.AddNeededAction(NeededAction.Lure);
-
-            if (Settings.Default.AutoCharm) this.AddNeededAction(NeededAction.Charm);
-
-            if (Settings.Default.AutoRaft) this.AddNeededAction(NeededAction.Raft);
-
-            if (Settings.Default.AutoBait) this.AddNeededAction(NeededAction.Bait);
-
-            this.SetActualState(FishingState.Start);
         }
 
-        public void Resume()
+        private static System.Windows.Forms.Timer InitializeTimer(EventHandler handler)
         {
-            this.SetActualState(FishingState.Start);
+            var timer = new System.Windows.Forms.Timer {Enabled = false};
+            timer.Tick += handler;
+            return timer;
         }
 
-        public void SetActualState(FishingState newState)
+        public async Task StartOrResumeOrPause()
         {
-            if (this.IsStoppedOrPaused()) if (newState != FishingState.Start) return;
-
-            this.UpdateStats(newState);
-
-            this.m_actualState = newState;
+            switch (_fishingState)
+            {
+                case FishingState.Stopped:
+                    await RunBotUntilCanceled();
+                    break;
+                case FishingState.Paused:
+                    await Resume();
+                    break;
+                default:
+                    Pause();
+                    break;
+            }
         }
 
-        public void Start()
+        private async Task RunBotUntilCanceled()
         {
-            if (this.GetActualState() == FishingState.Stopped) this.ReStart();
-            else if (this.GetActualState() == FishingState.Paused) this.Resume();
+            var wowWindowPointer = Win32.FindWowWindow(); // update window pointer in case wow started after fishbot or restarted.
+            _eyes.SetWow(wowWindowPointer);
+            _hands.SetWow(wowWindowPointer);
+            ResetTimers();
+            EnableTimers();
+            _mouth.Say(Translate.GetTranslate("frmMain", "LABEL_STARTED"));
+            _mManagerEventHandler.Started();
+            await RunBot();
+        }
+
+        private async Task Resume()
+        {
+            _mouth.Say(Translate.GetTranslate("frmMain", "LABEL_RESUMED"));
+            _mManagerEventHandler.Resumed();
+            await RunBot();
+        }
+
+        private async Task RunBot()
+        {
+            _fishErrorLength = 0;
+            _fishingState = FishingState.Fishing;
+            _cancellationTokenSource = new CancellationTokenSource();
+            var cancellationToken = _cancellationTokenSource.Token;
+            var session = new BotSession();
+            try
+            {
+                while (!cancellationToken.IsCancellationRequested)
+                {
+
+                    // We first check if another action is needed, foreach on all NeededAction enum values
+                    foreach (var neededAction in (NeededAction[])Enum.GetValues(typeof(NeededAction)))
+                    {
+                        if (HasNeededAction(neededAction))
+                        {
+                            await HandleNeededAction(neededAction, cancellationToken);
+                        }
+                    }
+
+                    // If no other action required, we can cast !
+                    await Fish(session, cancellationToken);
+                    if (_fishErrorLength > 10 ) {
+                        Stop();
+                    }
+                }
+
+            }
+            catch (TaskCanceledException)
+            {
+                //ignore
+            }
+            finally
+            {
+                _cancellationTokenSource.Dispose();
+                _cancellationTokenSource = null;
+            }
+        }
+
+        private void CancelRun()
+        {
+            if (!IsStoppedOrPaused())
+            {
+                Debug.Assert(_cancellationTokenSource != null);
+                _cancellationTokenSource.Cancel();
+            }
+        }
+
+        private void Pause()
+        {
+            CancelRun();
+            _fishingState = FishingState.Paused;
+            _mouth.Say(Translate.GetTranslate("frmMain", "LABEL_PAUSED"));
+            _mManagerEventHandler.Paused();
+        }
+
+        private void EnableTimers()
+        {
+            if (Properties.Settings.Default.AutoLure)
+            {
+                AddNeededAction(NeededAction.Lure);
+                _lureTimer.Enabled = true;
+            }
+
+            if (Properties.Settings.Default.AutoCharm)
+            {
+                AddNeededAction(NeededAction.Charm);
+                _charmTimer.Enabled = true;
+            }
+
+            if (Properties.Settings.Default.AutoRaft)
+            {
+                AddNeededAction(NeededAction.Raft);
+                _raftTimer.Enabled = true;
+            }
+
+            if (Properties.Settings.Default.AutoBait)
+            {
+                AddNeededAction(NeededAction.Bait);
+                _baitTimer.Enabled = true;
+            }
+
+            if (Properties.Settings.Default.AutoHearth)
+                _hearthStoneTimer.Enabled = true;
+
+            if (Properties.Settings.Default.AntiAfk)
+                _antiAfkTimer.Enabled = true;
         }
 
         public void Stop()
         {
-            this.SwitchTimerState(false);
-            this.SetActualState(FishingState.Stopped);
+            CancelRun();
+            _fishingState = FishingState.Stopped;
+            _mouth.Say(Translate.GetTranslate("frmMain", "LABEL_STOPPED"));
+            _mManagerEventHandler.Stopped();
+            _lureTimer.Enabled        = false;
+            _raftTimer.Enabled        = false;
+            _charmTimer.Enabled       = false;
+            _baitTimer.Enabled        = false;
+            _hearthStoneTimer.Enabled = false;
         }
 
-        private void AddNeededAction(NeededAction action)
+        private bool IsStoppedOrPaused()
         {
-            this.m_neededActions |= action;
+            return _fishingState == FishingState.Stopped || _fishingState == FishingState.Paused;
         }
 
-        private void AntiAfkTimerTick(object myObject, EventArgs myEventArgs)
+        public void HearFish()
         {
-            this.AddNeededAction(NeededAction.AntiAfkMove);
+            return _fishingStats;
         }
 
-        private void BaitTimerTick(object myObject, EventArgs myEventArgs)
+        public bool IsStoppedOrPaused()
         {
-            this.AddNeededAction(NeededAction.Bait);
+            _fishingStats.Reset();
         }
-
-        private void CharmTimerTick(object myObject, EventArgs myEventArgs)
+        
+        public async Task StartOrStop()
         {
-            this.AddNeededAction(NeededAction.Charm);
+            if (IsStoppedOrPaused())
+                await StartOrResumeOrPause();
+            else
+                Stop();
         }
 
-        private void HandleNeededAction(NeededAction action)
+        private void ResetTimers()
+        {
+            _lureTimer.Interval        = Properties.Settings.Default.LureTime * Minute + 22 * Second;
+            _raftTimer.Interval        = Properties.Settings.Default.RaftTime * Minute;
+            _charmTimer.Interval       = Properties.Settings.Default.CharmTime * Minute;
+            _baitTimer.Interval        = Properties.Settings.Default.BaitTime * Minute;
+            _hearthStoneTimer.Interval = Properties.Settings.Default.HearthTime * Minute;
+            _antiAfkTimer.Interval     = Properties.Settings.Default.AntiAfkTime * Minute;
+        }
+
+        private async Task Fish(BotSession session, CancellationToken cancellationToken)
+        {
+            _mouth.Say(Translate.GetTranslate("manager", "LABEL_CASTING"));
+            _eyes.UpdateBackground();
+            await _hands.Cast(cancellationToken);
+
+            _mouth.Say(Translate.GetTranslate("manager", "LABEL_FINDING"));
+            // Make bobber found async, so can check fishing sound in parallel, the result only important when we hear fish.
+            // The position used for repositioning.
+            var eyeCancelTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            var eyeCancelToken = eyeCancelTokenSource.Token;
+            var eyeTask = Task.Run(async () => await _eyes.LookForBobber(session, eyeCancelToken), eyeCancelToken);
+
+            // Update UI with wait status            
+            var uiUpdateCancelTokenSource =  CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            var uiUpdateCancelToken = uiUpdateCancelTokenSource.Token;
+            var progress = new Progress<long>(msecs =>
+            {
+                if (!uiUpdateCancelToken.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+                {
+                    _mouth.Say(Translate.GetTranslate(
+                        "manager",
+                        "LABEL_WAITING",
+                        msecs / Second,
+                        _aFishWait / Second));
+                }
+            });
+            var uiUpdateTask = Task.Run(
+                async () => await UpdateUiWhileWaitingToHearFish(progress, uiUpdateCancelToken),
+                uiUpdateCancelToken);
+
+            var rnd = new Random();
+            _aFishWait = rnd.Next(Properties.Settings.Default.FishWaitLow, Properties.Settings.Default.FishWaitHigh);
+            var fishHeard = await _ears.Listen(
+                _aFishWait,
+                cancellationToken);
+            //Log.Information("Ear result: "+a_FishWait.ToString());
+
+            uiUpdateCancelTokenSource.Cancel();
+            try {
+                uiUpdateTask.GetAwaiter().GetResult(); // Wait & Unwrap
+                // https://github.com/StephenCleary/AsyncEx/blob/dc54d22b06566c76db23af06afcd0727cac625ef/Source/Nito.AsyncEx%20(NET45%2C%20Win8%2C%20WP8%2C%20WPA81)/Synchronous/TaskExtensions.cs#L18
+            } catch (TaskCanceledException) {
+            } finally {
+                uiUpdateCancelTokenSource.Dispose();
+            }
+
+            if (!fishHeard) {
+                _fishingStats.RecordNotHeard();
+                _fishErrorLength++;
+                return;
+            }
+
+            // We heard the fish, let's check bobbers position
+            if (!eyeTask.IsCompleted) {
+                // the search is not finished yet, but fish is heard, we have 2 seconds left to find and hook it
+                eyeTask.Wait(2000, cancellationToken);
+                eyeCancelTokenSource.Cancel();
+            }
+            eyeCancelTokenSource.Dispose();
+
+            if (eyeTask.IsCompleted) {
+                // search is ended what's the result?
+                var bobberPos = eyeTask.Result;
+
+                if (bobberPos != null && bobberPos.X != 0 && bobberPos.Y != 0) {
+                    // bobber found
+                    if (await _eyes.SetMouseToBobber(session, bobberPos, cancellationToken)) {
+                        // bobber is still there
+                        Log.Information("Bobber databl: ({bx},{by})", bobberPos.X, bobberPos.Y);
+                        await _hands.Loot();
+                        _mouth.Say(Translate.GetTranslate("manager", "LABEL_HEAR_FISH"));
+                        _fishingStats.RecordSuccess();
+                        _fishErrorLength = 0;
+                        Log.Information("Fish success");
+                        return;
+                    }
+                }
+            }
+            _fishingStats.RecordBobberNotFound();
+            _fishErrorLength++;
+        }
+
+        public void CaptureCursor() {
+            _eyes.CaptureCursor();
+        }
+
+
+        private async Task UpdateUiWhileWaitingToHearFish(
+            IProgress<long> progress, 
+            CancellationToken uiUpdateCancelToken)
+        {
+            // We are waiting a detection from the Ears
+            var stopwatch = new Stopwatch();
+            stopwatch.Start();
+            while (!uiUpdateCancelToken.IsCancellationRequested)
+            {
+                progress.Report(stopwatch.ElapsedMilliseconds);
+                await Task.Delay(Second / 10, uiUpdateCancelToken);
+            }
+            uiUpdateCancelToken.ThrowIfCancellationRequested();
+        }
+
+        private async Task HandleNeededAction(NeededAction action, CancellationToken cancellationToken)
         {
             switch (action)
             {
                 case NeededAction.HearthStone:
-                    this.m_mainForm.StopFishing();
+                    Stop();
                     goto case NeededAction.Lure; // We continue, Hearthstone need m_hands.DoAction
                 case NeededAction.Lure:
                 case NeededAction.Charm:
                 case NeededAction.Raft:
                 case NeededAction.Bait:
-                    this.m_hands.DoAction(action, this.m_mouth);
+                    await _hands.DoAction(action, _mouth, cancellationToken);
                     break;
                 case NeededAction.AntiAfkMove:
-                    this.m_legs.DoMovement(this.t2s);
+                    await _legs.DoMovement(_t2S, cancellationToken);
                     break;
             }
 
@@ -272,158 +426,17 @@
 
         private void ResetTimers()
         {
-            this.m_nextActionTimer.Interval = ACTION_TIMER_LENGTH;
-            this.m_LureTimer.Interval = Settings.Default.LureTime * MINUTE + 22 * SECOND;
-            this.m_RaftTimer.Interval = Settings.Default.RaftTime * MINUTE;
-            this.m_CharmTimer.Interval = Settings.Default.CharmTime * MINUTE;
-            this.m_BaitTimer.Interval = Settings.Default.BaitTime * MINUTE;
-            this.m_HearthStoneTimer.Interval = Settings.Default.HearthTime * MINUTE;
-            this.m_AntiAfkTimer.Interval = Settings.Default.AntiAfkTime * MINUTE;
-
-            this.m_fishWaitTime = 0;
+            _neededActions |= action;
         }
 
         private void SwitchTimerState(bool enabled)
         {
-            // For activation, we check that the corresponding settings are sets
-            if (enabled)
-            {
-                this.m_nextActionTimer.Enabled = true;
-
-                if (Settings.Default.AutoLure) this.m_LureTimer.Enabled = true;
-
-                if (Settings.Default.AutoRaft) this.m_RaftTimer.Enabled = true;
-
-                if (Settings.Default.AutoCharm) this.m_CharmTimer.Enabled = true;
-
-                if (Settings.Default.AutoBait) this.m_BaitTimer.Enabled = true;
-
-                if (Settings.Default.AutoHearth) this.m_HearthStoneTimer.Enabled = true;
-
-                if (Settings.Default.AntiAfk) this.m_AntiAfkTimer.Enabled = true;
-            }
-
-            // On deactivation, we don't care
-            else
-            {
-                this.m_nextActionTimer.Enabled = false;
-                this.m_LureTimer.Enabled = false;
-                this.m_RaftTimer.Enabled = false;
-                this.m_CharmTimer.Enabled = false;
-                this.m_BaitTimer.Enabled = false;
-                this.m_HearthStoneTimer.Enabled = false;
-            }
+            _neededActions &= ~action;
         }
 
         private void TakeNextAction(object myObject, EventArgs myEventArgs)
         {
-            switch (this.GetActualState())
-            {
-                case FishingState.Start:
-                    {
-                        // We just start, going to Idle to begin bot loop
-                        this.SetActualState(FishingState.Idle);
-                        break;
-                    }
-
-                case FishingState.Idle:
-                    {
-                        // We first check if another action is needed, foreach on all NeededAction enum values
-                        foreach (var neededAction in (NeededAction[])Enum.GetValues(typeof(NeededAction)))
-                        {
-                            if (this.HasNeededAction(neededAction))
-                            {
-                                this.HandleNeededAction(neededAction);
-                                return;
-                            }
-                        }
-
-                        // If no other action required, we can cast !
-                        this.m_mouth.Say(Translate.GetTranslate("manager", "LABEL_CASTING"));
-                        this.SetActualState(FishingState.Casting);
-                        this.m_hands.Cast();
-                        break;
-                    }
-
-                case FishingState.Casting:
-                    {
-                        this.m_mouth.Say(Translate.GetTranslate("manager", "LABEL_START_FINDING"));
-                        this.SetActualState(FishingState.SearchingForBobber);
-                        this.m_eyes.StartLooking(); // <= The new state will be set in the Eyes
-                        break;
-                    }
-
-                case FishingState.SearchingForBobber:
-                    {
-                        // We are just waiting for the Eyes
-                        this.m_mouth.Say(Translate.GetTranslate("manager", "LABEL_FINDING"));
-                        break;
-                    }
-
-                case FishingState.WaitingForFish:
-                    {
-                        // We are waiting a detection from the Ears
-                        this.m_mouth.Say(Translate.GetTranslate("manager", "LABEL_WAITING", this.GetFishWaitTime() / 1000, Settings.Default.FishWait / 1000));
-
-                        if ((this.m_fishWaitTime += ACTION_TIMER_LENGTH) >= Settings.Default.FishWait)
-                        {
-                            this.SetActualState(FishingState.Idle);
-                            this.m_fishWaitTime = 0;
-                        }
-
-                        break;
-                    }
-            }
-        }
-
-        private void UpdateStats(FishingState newState)
-        {
-            if (newState == FishingState.Idle)
-            {
-                // If we start a new loop, check why and increase stats according
-                switch (this.m_actualState)
-                {
-                    case FishingState.Looting:
-                        {
-                            ++this.m_fishingStats.totalSuccessFishing;
-                            break;
-                        }
-
-                    case FishingState.Casting:
-                    case FishingState.SearchingForBobber:
-                        {
-                            ++this.m_fishingStats.totalNotFoundFish;
-                            break;
-                        }
-
-                    case FishingState.WaitingForFish:
-                        {
-                            ++this.m_fishingStats.totalNotEaredFish;
-                            break;
-                        }
-                }
-            }
-        }
-
-        public struct FishingStats
-        {
-            public int totalSuccessFishing { get; set; }
-
-            public int totalNotFoundFish { get; set; }
-
-            public int totalNotEaredFish { get; set; }
-
-            public void Reset()
-            {
-                this.totalSuccessFishing = 0;
-                this.totalNotFoundFish = 0;
-                this.totalNotEaredFish = 0;
-            }
-
-            public int Total()
-            {
-                return this.totalSuccessFishing + this.totalNotFoundFish + this.totalNotEaredFish;
-            }
+            return (_neededActions & action) != NeededAction.None;
         }
     }
 }

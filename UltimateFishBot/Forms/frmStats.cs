@@ -1,4 +1,7 @@
-﻿namespace UltimateFishBot.Forms
+﻿using System;
+using System.Windows.Forms;
+
+namespace UltimateFishBot.Forms
 {
     using System;
     using System.Windows.Forms;
@@ -21,21 +24,21 @@
 
         public static frmStats GetForm(Manager manag)
         {
-            if (inst == null || inst.IsDisposed) inst = new frmStats(manag);
-            return inst;
-        }
-
-        private void buttonClose_Click(object sender, EventArgs e)
-        {
-            this.Close();
+            this.Text = Translate.GetTranslate("frmStats", "TITLE");
+            labelSuccess.Text = Translate.GetTranslate("frmStats", "LABEL_SUCCESS");
+            labelNotFound.Text = Translate.GetTranslate("frmStats", "LABEL_NOT_FOUND");
+            labelNotEared.Text = Translate.GetTranslate("frmStats", "LABEL_NOT_EARED");
+            labelTotal.Text = Translate.GetTranslate("frmStats", "LABEL_TOTAL");
+            buttonReset.Text = Translate.GetTranslate("frmStats", "BUTTON_RESET");
+            buttonClose.Text = Translate.GetTranslate("frmStats", "BUTTON_CLOSE");
         }
 
         private void buttonReset_Click(object sender, EventArgs e)
         {
-            this.labelSuccessCount.Text = "0";
-            this.labelNotFoundCount.Text = "0";
-            this.labelNotEaredCount.Text = "0";
-            this.labelTotalCount.Text = "0";
+            labelSuccessCount.Text = "0";
+            labelNotFoundCount.Text = "0";
+            labelNotEaredCount.Text = "0";
+            labelTotalCount.Text = "0";
 
             this.m_manager.ResetFishingStats();
         }
@@ -58,11 +61,13 @@
 
         private void UpdateStats()
         {
-            var stats = this.m_manager.GetFishingStats();
-            this.labelSuccessCount.Text = stats.totalSuccessFishing.ToString();
-            this.labelNotFoundCount.Text = stats.totalNotFoundFish.ToString();
-            this.labelNotEaredCount.Text = stats.totalNotEaredFish.ToString();
-            this.labelTotalCount.Text = stats.Total().ToString();
+            FishingStats stats = m_manager.GetFishingStats();
+            labelSuccessCount.Text = stats.TotalSuccessFishing.ToString();
+            labelNotFoundCount.Text = stats.TotalNotFoundFish.ToString();
+            labelNotEaredCount.Text = stats.TotalNotEaredFish.ToString();
+            labelTotalCount.Text = stats.Total().ToString();
         }
+
+        private Manager m_manager;
     }
 }

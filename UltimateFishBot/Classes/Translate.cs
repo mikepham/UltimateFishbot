@@ -1,27 +1,46 @@
-﻿namespace UltimateFishBot.Classes
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Xml;
+
+namespace UltimateFishBot
 {
-    using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Xml;
-
-    using UltimateFishBot.Properties;
-
     internal class Translate
     {
-        private static XmlElement m_elements;
+        private const string MissingTranslation = "<MISSING TRANSLATION>";
+        private static XmlElement _mElements = null;
+
+        private static void ExtractElements()
+        {
+            if (_mElements == null)
+            {
+                XmlDocument doc = new XmlDocument();
+
+                try
+                {
+                    // Example : ./Resources/English.xml
+                    doc.Load("./Resources/" + Properties.Settings.Default.Language + ".xml");
+                    _mElements = doc.DocumentElement;
+                }
+                catch (Exception ex)
+                {
+                    Console.Out.WriteLine(ex.Message);
+                }
+            }
+        }
 
         public static string GetTranslate(string formName, string nodeName, params object[] list)
         {
             ExtractElements();
-            var returnText = "MISSING TRANSLATION";
+            string returnText = MissingTranslation;
 
             // If we can't open the Translation file, everything will appear as "MISSING TRANSLATION"
-            if (m_elements == null) return returnText;
+            if (_mElements == null)
+                return returnText;
 
             try
             {
-                var formList = m_elements.GetElementsByTagName(formName);
+                XmlNodeList formList = _mElements.GetElementsByTagName(formName);
 
                 // Try to find the correct translation for formName and nodeName
                 foreach (XmlNode mainNode in formList)
@@ -45,31 +64,30 @@
 
             return returnText;
         }
-
-        public static List<string> GetTranslates(string formName, string nodeName, params object[] list)
+        public static IEnumerable<string> GetTranslates(string formName, string nodeName, params object[] list)
         {
             ExtractElements();
-            var returnList = new List<string>();
+            List<string> returnList = new List<string>();
 
             // If we can't open the Translation file, everything will appear as "MISSING TRANSLATION"
-            if (m_elements == null)
+            if (_mElements == null)
             {
-                returnList.Add("MISSING_TRANSLATION");
+                returnList.Add(MissingTranslation);
                 return returnList;
             }
 
             try
             {
-                var formList = m_elements.GetElementsByTagName(formName);
+                XmlNodeList formList = _mElements.GetElementsByTagName(formName);
 
                 // Try to find the correct translation for formName and nodeName
                 foreach (XmlNode mainNode in formList) foreach (XmlNode node in mainNode.ChildNodes) if (node.Name == nodeName) returnList.Add(node.InnerText);
 
                 // Remove the extras spaces from each lines
-                returnList.Select(text => string.Join("\n", text.Split('\n').Select(s => s.Trim())));
+                var enumerable = returnList.Select(text => string.Join("\n", text.Split('\n').Select(s => s.Trim())));
 
                 // Replace {int} in text by variables. Ex : "Waiting for Fish ({0}/{1}s) ..."
-                returnList.Select(text => string.Format(text, list));
+                return enumerable.Select(text => string.Format(text, list));
             }
             catch (Exception ex)
             {

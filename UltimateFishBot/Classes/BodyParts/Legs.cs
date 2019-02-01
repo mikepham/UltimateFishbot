@@ -1,57 +1,55 @@
-﻿namespace UltimateFishBot.Classes.BodyParts
+﻿using System;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using UltimateFishBot.Helpers;
+
+namespace UltimateFishBot.BodyParts
 {
-    using System.Threading;
-    using System.Windows.Forms;
-
-    using UltimateFishBot.Classes.Helpers;
-    using UltimateFishBot.Properties;
-
     internal class Legs
     {
-        public enum Path
+        private enum Path
         {
-            FRONT_BACK = 0, 
-
-            LEFT_RIGHT = 1, 
-
-            JUMP = 2
+            FrontBack = 0,
+            LeftRight = 1,
+            Jump       = 2
         }
 
-        public void DoMovement(T2S t2s)
+        public async Task DoMovement(T2S t2S, CancellationToken cancellationToken)
         {
             switch ((Path)Settings.Default.AntiAfkMoves)
             {
-                case Path.FRONT_BACK:
-                    this.MovePath(new[] { Keys.Up, Keys.Down });
+                case Path.FrontBack:
+                    await MovePath(new[] { Keys.Up, Keys.Down }, cancellationToken);
                     break;
-                case Path.LEFT_RIGHT:
-                    this.MovePath(new[] { Keys.Left, Keys.Right });
+                case Path.LeftRight:
+                    await MovePath(new[] { Keys.Left, Keys.Right }, cancellationToken);
                     break;
-                case Path.JUMP:
-                    this.MovePath(new[] { Keys.Space });
+                case Path.Jump:
+                    await MovePath(new[] { Keys.Space }, cancellationToken);
+                    await Task.Delay(500, cancellationToken);
                     break;
                 default:
-                    this.MovePath(new[] { Keys.Left, Keys.Right });
+                    await MovePath(new[] { Keys.Left, Keys.Right }, cancellationToken);
                     break;
             }
-
-            t2s?.Say("Anti A F K");
+            t2S?.Say("Anti A F K");
         }
 
-        private void MovePath(Keys[] moves)
+        private async Task MovePath(Keys[] moves, CancellationToken cancellationToken)
         {
             foreach (var move in moves)
             {
-                this.SingleMove(move);
-                Thread.Sleep(250);
+                await SingleMove(move, cancellationToken);
+                await Task.Delay(new Random().Next(100,500), cancellationToken);
             }
         }
 
-        private void SingleMove(Keys move)
+        private static async Task SingleMove(Keys move, CancellationToken cancellationToken)
         {
-            Win32.SendKeyboardAction(move, Win32.keyState.KEYDOWN);
-            Thread.Sleep(250);
-            Win32.SendKeyboardAction(move, Win32.keyState.KEYUP);
+            Win32.SendKeyboardAction(move, Win32.KeyState.Keydown);
+            await Task.Delay(new Random().Next(100, 250), cancellationToken);
+            Win32.SendKeyboardAction(move, Win32.KeyState.Keyup);
         }
     }
 }

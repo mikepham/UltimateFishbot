@@ -1,16 +1,15 @@
-﻿namespace UltimateFishBot.Forms
+﻿using System;
+using System.Diagnostics;
+using System.Reflection;
+using System.Windows.Forms;
+using UltimateFishBot.BodyParts;
+
+namespace UltimateFishBot.Forms
 {
-    using System;
-    using System.Diagnostics;
-    using System.IO;
-    using System.Reflection;
-    using System.Windows.Forms;
-
-    using UltimateFishBot.Classes;
-    using UltimateFishBot.Classes.BodyParts;
-
     internal partial class about : Form
     {
+        private string webLink = "http://fishbot.net/";
+        private string gitLink = "https://github.com/Szabka/UltimateFishbot";
         private static about inst;
 
         private string gitLink = "https://github.com/UltimateFishbot/UltimateFishbot";
@@ -37,7 +36,20 @@
             }
         }
 
-        public string AssemblyCompany
+        public about()
+        {
+            InitializeComponent();
+            this.Text = String.Format("About {0}", AssemblyTitle);
+            this.labelProductName.Text = AssemblyProduct;
+            this.labelVersion.Text = String.Format("Version {0}", AssemblyVersion);
+            this.labelCopyright.Text = AssemblyCopyright;
+            this.labelCompanyName.Text = gitLink;
+            this.textBoxDescription.Text = AssemblyDescription;
+        }
+
+        #region Assembly Attribute Accessors
+
+        public string AssemblyTitle
         {
             get
             {
