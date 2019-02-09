@@ -1,48 +1,63 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Net.Mime;
-using System.Reflection;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-
 namespace UFBLauncher
 {
-    class Program
+    using System;
+    using System.Diagnostics;
+    using System.IO;
+    using System.Reflection;
+    using System.Runtime.InteropServices;
+    using System.Threading;
+    using Properties;
+
+    internal class Program
     {
         private const string ExeExt = ".exe";
         private const string DefaultName = "UltimateFishBot.exe";
 
-        static void Main(string[] args)
+        private static void Main(string[] args)
         {
-            var lastName = Properties.Settings.Default.UFBName;
+            var lastName = Settings.Default.UFBName;
 
-            if (!RunBotSecretly(lastName)) RunBotSecretly(DefaultName);
+            if (RunBotSecretly(lastName) == false)
+            {
+                RunBotSecretly(DefaultName);
+            }
         }
 
         [DllImport("user32.dll")]
-        static extern int SetWindowText(IntPtr hWnd, string text);
+        private static extern int SetWindowText(IntPtr ptr, string text);
 
-        static bool RunBotSecretly(string name)
+        private static bool RunBotSecretly(string name)
         {
-            var currentPath = Path.Combine(Path.GetDirectoryName(Assembly.GetEntryAssembly().Location), name);
+            var assembly = Assembly.GetEntryAssembly();
+            var assemblyPath = Path.GetDirectoryName(assembly.Location);
+
+            Debug.Assert(string.IsNullOrWhiteSpace(assemblyPath) == false, "Requires assembly path");
+
+            var currentPath = Path.Combine(assemblyPath, name);
             var ufbExeFile = new FileInfo(currentPath);
+
             if (ufbExeFile.Exists)
             {
+                var path = Path.GetDirectoryName(currentPath);
+
+                Debug.Assert(string.IsNullOrWhiteSpace(path) == false, "Path required");
+
                 var newName = StringUtils.RandomString(12) + ExeExt;
-                var newPath = Path.Combine(Path.GetDirectoryName(currentPath), newName);
+                var newPath = Path.Combine(path, newName);
                 ufbExeFile.MoveTo(newPath);
-                Properties.Settings.Default.UFBName = newName;
-                Properties.Settings.Default.Save();
-                var p = Process.Start(ufbExeFile.FullName);
+
+                Settings.Default.UFBName = newName;
+                Settings.Default.Save();
+
+                var process = Process.Start(ufbExeFile.FullName);
+
+                Debug.Assert(process != null, "Failed to start process");
+
                 Thread.Sleep(1500);
-                SetWindowText(p.MainWindowHandle, newName);
+                SetWindowText(process.MainWindowHandle, newName);
                 return true;
             }
+
             return false;
         }
     }
